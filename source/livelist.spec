@@ -5,7 +5,13 @@ a = Analysis(
     ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[('../index.html', '.')],   # ルートの index.html を _MEIPASS に同梱
+    datas=[
+        ('../index.html', '.'),           # Web UI
+        ('../asset/favicon.ico',  'asset'),  # ブラウザタブアイコン
+        ('../asset/icon-180.png', 'asset'),  # Apple Touch Icon
+        ('../asset/icon-192.png', 'asset'),  # Web アプリアイコン
+        ('../asset/icon-512.png', 'asset'),  # Web アプリアイコン（大）
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
