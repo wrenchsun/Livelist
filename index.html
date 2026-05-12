@@ -1,0 +1,1554 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Livelist</title>
+<link rel="icon" href="asset/favicon.ico" sizes="any">
+<link rel="icon" href="asset/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="asset/icon-180.png">
+<style>
+*,::before,::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090f;--surf:#111119;--surf2:#18182a;
+  --b1:#1c1c2e;--b2:#282840;
+  --txt:#ddddf0;--txt2:#8888b0;--txt3:#44446a;
+  --live:#ff3a3a;--upcoming:#4a9eff;--premiere:#a855f7;
+  --archive:#6b7280;--short:#22d3ee;--video:#d4d4d4;
+  --green:#22c55e;--red:#ef4444;--twitch:#9147ff;
+}
+html,body{height:100%}
+body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;
+  display:flex;flex-direction:column;}
+
+/* ── Status bar ── */
+#statusBar{
+  flex-shrink:0;background:rgba(9,9,15,.95);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--b1);padding:0 16px;height:44px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.status-left{display:flex;align-items:center;gap:10px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--txt3);flex-shrink:0;transition:background .3s}
+.status-dot.connected{background:var(--green)}
+.status-dot.error{background:var(--red);animation:blink 1.2s ease-in-out infinite}
+.status-text{font-size:12px;color:var(--txt2)}
+.status-right{display:flex;align-items:center;gap:6px}
+.last-update{font-size:11px;color:var(--txt3);margin-right:4px}
+.sbar-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--b2);background:transparent;
+  color:var(--txt2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.sbar-btn:hover{border-color:var(--upcoming);color:var(--upcoming)}
+.sbar-btn.spin{animation:spin .6s linear}
+
+/* ── Setup banner ── */
+#setupBanner{
+  flex-shrink:0;background:rgba(74,158,255,.08);border-bottom:1px solid rgba(74,158,255,.2);
+  padding:8px 16px;display:none;align-items:center;gap:8px;flex-wrap:wrap;
+}
+#setupBanner span{font-size:12px;color:var(--upcoming);white-space:nowrap}
+.server-combo{display:flex;gap:6px;flex:1;min-width:260px;max-width:480px;align-items:center;flex-wrap:wrap}
+.server-combo select,.server-combo input{
+  padding:5px 10px;border-radius:6px;border:1px solid rgba(74,158,255,.4);
+  background:rgba(9,9,15,.9);color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;}
+.server-combo select:focus,.server-combo input:focus{border-color:var(--upcoming)}
+.server-combo select{flex:1;min-width:180px;cursor:pointer}
+.server-combo input{flex:1;min-width:180px}
+.server-combo input::placeholder{color:var(--txt3)}
+#setupBanner button{padding:5px 14px;border-radius:6px;border:none;
+  background:var(--upcoming);color:#fff;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+
+/* ── Tag filter bar ── */
+#tagFilterBar{
+  flex-shrink:0;background:var(--surf);border-bottom:1px solid var(--b1);
+  padding:8px 16px;display:flex;align-items:center;gap:6px;
+  overflow-x:auto;white-space:nowrap;
+}
+#tagFilterBar::-webkit-scrollbar{height:3px}
+#tagFilterBar::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.tag-chip{
+  padding:4px 12px;border-radius:14px;border:1px solid var(--b2);
+  background:transparent;color:var(--txt2);cursor:pointer;
+  font-size:12px;font-weight:500;white-space:nowrap;transition:all .15s;flex-shrink:0;
+}
+.tag-chip:hover{border-color:var(--upcoming);color:var(--upcoming)}
+.tag-chip.active{border-color:var(--upcoming);color:var(--upcoming);background:rgba(74,158,255,.12)}
+
+/* ── App layout ── */
+.app{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* ── Sidebar ── */
+#sidebar{width:228px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--b1);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-head{padding:10px 12px 9px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sidebar-title{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--txt3);text-transform:uppercase}
+.add-ch-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--b2);background:transparent;
+  color:var(--txt2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1}
+.add-ch-btn:hover{border-color:var(--upcoming);color:var(--upcoming)}
+#channelList{flex:1;overflow-y:auto;padding:5px}
+#channelList::-webkit-scrollbar{width:4px}
+#channelList::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.sidebar-empty{padding:24px 14px;text-align:center;font-size:12px;color:var(--txt3);line-height:1.7}
+
+/* Channel item */
+.ch-item{
+  display:flex;align-items:center;gap:7px;
+  padding:6px 7px;border-radius:8px;cursor:default;transition:background .12s;
+  position:relative;
+}
+.ch-item:hover{background:var(--surf2)}
+.ch-item:hover .ch-actions{opacity:1}
+.ch-item.dragging{opacity:.4}
+.ch-item.drag-over{border-top:2px solid var(--upcoming)}
+.drag-handle{
+  cursor:grab;color:var(--txt3);font-size:13px;flex-shrink:0;
+  padding:2px 1px;user-select:none;line-height:1;
+}
+.drag-handle:active{cursor:grabbing}
+.ch-avatar{width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.ch-avatar-init{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;text-transform:uppercase}
+.ch-name{font-size:12px;color:var(--txt2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-tags-row{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:1px}
+.ch-tag-pip{display:inline-block;font-size:9px;padding:0px 5px;border-radius:6px;background:var(--surf2);color:var(--txt3);border:1px solid var(--b2);margin-right:3px;vertical-align:middle}
+.ch-actions{display:flex;gap:3px;opacity:0;transition:opacity .12s;flex-shrink:0}
+.ch-action-btn{width:20px;height:20px;border-radius:4px;border:none;background:transparent;color:var(--txt3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:color .12s}
+.ch-action-btn.edit:hover{color:var(--upcoming)}
+.ch-action-btn.del:hover{color:var(--live)}
+
+/* ── Main ── */
+#main{flex:1;overflow-y:auto;padding:18px 20px 80px;min-width:0}
+#main::-webkit-scrollbar{width:6px}
+#main::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}
+
+/* ── Sections ── */
+.section{margin-bottom:30px}
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--b1)}
+.section-label{font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--txt3);text-transform:uppercase;flex:1}
+.section-label.live{color:var(--live)}
+.section-count{font-size:10px;color:var(--txt3);background:var(--surf2);border:1px solid var(--b2);padding:1px 7px;border-radius:10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.cards.live-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+
+/* ── Cards ── */
+.card{background:var(--surf);border:1px solid var(--b1);border-radius:10px;overflow:hidden;
+  transition:transform .14s,border-color .14s,box-shadow .14s;display:flex;flex-direction:column}
+.card:hover{transform:translateY(-2px);border-color:var(--b2);box-shadow:0 8px 28px rgba(0,0,0,.4)}
+.card.live{border-color:rgba(255,58,58,.3)}
+.card.upcoming{border-color:rgba(74,158,255,.2)}
+.card.premiere{border-color:rgba(168,85,247,.2)}
+.thumb-wrap{position:relative;display:block;aspect-ratio:16/9;overflow:hidden;background:#0d0d18;flex-shrink:0;text-decoration:none}
+.card-thumb{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
+.card:hover .card-thumb{transform:scale(1.04)}
+.thumb-overlay{position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;transition:background .2s}
+.card:hover .thumb-overlay{background:rgba(0,0,0,.25)}
+.play-circle{width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;font-size:16px;color:#fff}
+.card:hover .play-circle{opacity:1}
+.type-badge{position:absolute;top:7px;left:7px;font-size:10px;font-weight:700;letter-spacing:.6px;padding:2px 8px;border-radius:4px;backdrop-filter:blur(4px)}
+.type-live{background:rgba(255,50,50,.85);color:#fff;animation:blink 1.8s ease-in-out infinite}
+.type-upcoming{background:rgba(74,158,255,.85);color:#fff}
+.type-premiere{background:rgba(168,85,247,.85);color:#fff}
+.type-archive{background:rgba(107,114,128,.85);color:#fff}
+.type-short{background:rgba(34,211,238,.85);color:#000}
+.type-video{background:rgba(0,0,0,.7);color:#ddd}
+.duration-badge{position:absolute;bottom:5px;right:5px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.75);color:#fff}
+.platform-badge{position:absolute;top:7px;right:7px;font-size:9px;font-weight:700;letter-spacing:.4px;padding:2px 6px;border-radius:4px;backdrop-filter:blur(4px)}
+.platform-twitch{background:rgba(145,71,255,.85);color:#fff}
+.ch-platform-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;margin-left:2px}
+.ch-platform-twitch{background:var(--twitch)}
+.type-member{background:rgba(234,179,8,.85);color:#000}
+
+/* ── Type filter panel ── */
+#typeFilterPanel{
+  flex-shrink:0;background:var(--surf);border-bottom:1px solid var(--b1);
+  padding:7px 16px;display:none;align-items:center;gap:8px;flex-wrap:wrap;
+}
+#typeFilterPanel.open{display:flex}
+.type-filter-label{font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--txt3);text-transform:uppercase;white-space:nowrap;margin-right:2px}
+.type-chip{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:14px;border:1px solid var(--b2);
+  background:transparent;color:var(--txt3);cursor:pointer;
+  font-size:11px;font-weight:500;white-space:nowrap;transition:all .15s;flex-shrink:0;
+}
+.type-chip.on{color:var(--txt);border-color:var(--txt3)}
+.type-chip .tc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.type-chip-all{padding:4px 10px;border-radius:14px;border:1px solid var(--b2);background:transparent;color:var(--txt3);cursor:pointer;font-size:11px;transition:all .15s;white-space:nowrap}
+.type-chip-all:hover{border-color:var(--upcoming);color:var(--upcoming)}
+.tf-sep{width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0}
+.card-body{padding:9px 11px 11px;display:flex;flex-direction:column;gap:5px;flex:1}
+.card-ch{display:flex;align-items:center;gap:6px;min-width:0}
+.card-ch-img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.card-ch-init{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700}
+.card-ch-name{font-size:11px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-title{font-size:13px;font-weight:600;color:var(--txt);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-time{font-size:11px;color:var(--txt3);margin-top:1px}
+.card-time.live-t{color:var(--live)}
+.card-time.soon-t{color:var(--upcoming)}
+
+/* ── Empty / Notice ── */
+.notice{background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:11px 15px;font-size:12px;color:var(--txt2);margin-bottom:18px;line-height:1.6}
+.notice a{color:var(--upcoming);cursor:pointer;text-decoration:underline}
+.empty-state{text-align:center;padding:60px 20px;color:var(--txt3)}
+.empty-icon{font-size:48px;margin-bottom:14px}
+.empty-state p{font-size:13px}
+
+/* ── Wizard ── */
+#wizard{max-width:540px;margin:60px auto;text-align:center}
+.wizard-icon{font-size:56px;margin-bottom:18px}
+.wizard-title{font-size:22px;font-weight:700;margin-bottom:10px}
+.wizard-desc{font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px}
+.wizard-step{background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:18px 22px;text-align:left;margin-bottom:12px}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--upcoming);color:#fff;font-size:10px;font-weight:700;margin-right:6px}
+.step-title{font-size:14px;font-weight:600;margin-bottom:3px}
+.step-desc{font-size:12px;color:var(--txt2);line-height:1.6}
+.wizard-btn{margin-top:8px;padding:5px 14px;border-radius:6px;border:none;background:var(--upcoming);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;z-index:300;padding:16px;
+  opacity:0;pointer-events:none;transition:opacity .18s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surf);border:1px solid var(--b2);border-radius:14px;padding:22px;
+  width:100%;max-width:440px;max-height:90vh;overflow-y:auto;
+  transform:translateY(10px) scale(.98);transition:transform .18s}
+.overlay.open .modal{transform:none}
+.modal.wide{max-width:520px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:18px}
+.fgroup{margin-bottom:13px}
+.fgroup label{display:block;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--txt3);margin-bottom:5px}
+.fgroup input,.fgroup select,.fgroup textarea{width:100%;padding:8px 11px;background:var(--bg);border:1px solid var(--b2);border-radius:7px;color:var(--txt);font-size:13px;outline:none;transition:border-color .15s;font-family:inherit}
+.fgroup input:focus,.fgroup select:focus,.fgroup textarea:focus{border-color:var(--upcoming)}
+.fgroup select option{background:var(--surf2)}
+.fgroup .hint{font-size:11px;color:var(--txt3);margin-top:4px;line-height:1.5}
+.modal-foot{display:flex;gap:10px;margin-top:18px}
+.btn-cancel{flex:1;padding:9px;border-radius:7px;border:1px solid var(--b2);background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+.btn-cancel:hover{border-color:var(--b2);color:var(--txt)}
+.btn-primary{flex:2;padding:9px;border-radius:7px;border:none;background:var(--upcoming);color:#fff;cursor:pointer;font-size:13px;font-weight:700;transition:background .15s}
+.btn-primary:hover{background:#5aaeff}
+.btn-primary:disabled{background:var(--b2);cursor:not-allowed;color:var(--txt3)}
+.btn-danger{flex:1;padding:9px;border-radius:7px;border:1px solid rgba(255,58,58,.4);background:transparent;color:var(--live);cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+.btn-danger:hover{background:rgba(255,58,58,.1)}
+.modal-msg{font-size:12px;padding:8px 12px;border-radius:6px;margin-top:9px;display:none}
+.modal-msg.error{background:rgba(239,68,68,.1);color:#ef6666;border:1px solid rgba(239,68,68,.2)}
+.modal-msg.info{background:rgba(74,158,255,.08);color:#6ab4ff;border:1px solid rgba(74,158,255,.2)}
+
+/* ── Tag selector (in modals) ── */
+.tag-selector{display:flex;gap:6px;flex-wrap:wrap;min-height:30px;padding:4px 0}
+.tag-option{padding:4px 11px;border-radius:12px;border:1px solid var(--b2);background:transparent;color:var(--txt2);cursor:pointer;font-size:12px;font-weight:500;transition:all .15s}
+.tag-option:hover{border-color:var(--upcoming);color:var(--upcoming)}
+.tag-option.sel{border-color:var(--upcoming);color:var(--upcoming);background:rgba(74,158,255,.12)}
+.no-tags-hint{font-size:12px;color:var(--txt3)}
+.tag-inline-add{display:flex;gap:5px;align-items:center;margin-top:4px;width:100%}
+.tag-inline-add input{flex:1;min-width:80px;max-width:160px;padding:3px 8px;border-radius:10px;border:1px dashed var(--b2);background:transparent;color:var(--txt);font-size:11px;outline:none;transition:border-color .15s}
+.tag-inline-add input:focus{border-color:var(--upcoming);border-style:solid}
+.tag-inline-add input::placeholder{color:var(--txt3)}
+.tag-inline-add button{padding:3px 9px;border-radius:10px;border:1px solid var(--b2);background:transparent;color:var(--txt3);cursor:pointer;font-size:11px;white-space:nowrap;transition:all .15s}
+.tag-inline-add button:hover{border-color:var(--upcoming);color:var(--upcoming)}
+
+/* ── Settings ── */
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--b1);gap:12px}
+.settings-row:last-child{border-bottom:none}
+.settings-label{font-size:13px;flex:1}
+.settings-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.toggle{width:42px;height:22px;border-radius:11px;background:var(--b2);border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.toggle::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s}
+.toggle.on{background:var(--upcoming)}
+.toggle.on::after{left:23px}
+.section-divider{height:1px;background:var(--b1);margin:14px 0}
+
+/* Tag management in settings */
+.tag-manage-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;min-height:24px}
+.tag-manage-item{display:flex;align-items:center;gap:4px;padding:3px 8px 3px 10px;border-radius:12px;border:1px solid var(--b2);background:var(--surf2);font-size:12px;color:var(--txt2)}
+.tag-remove-btn{width:16px;height:16px;border-radius:50%;border:none;background:transparent;color:var(--txt3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:color .12s}
+.tag-remove-btn:hover{color:var(--live)}
+.tag-add-row{display:flex;gap:7px}
+.tag-add-row input{flex:1;padding:7px 10px;background:var(--bg);border:1px solid var(--b2);border-radius:7px;color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;font-family:inherit}
+.tag-add-row input:focus{border-color:var(--upcoming)}
+.tag-add-row button{padding:7px 14px;border-radius:7px;border:none;background:var(--upcoming);color:#fff;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+
+/* ── Loading ── */
+.loading-inline{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid var(--b2);border-top-color:var(--upcoming);animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
+
+/* ── Channel filter ── */
+.ch-clickable{display:flex;align-items:center;gap:7px;flex:1;min-width:0;cursor:pointer;border-radius:6px;padding:1px 3px;margin:-1px -3px;transition:background .12s}
+.ch-clickable:hover{background:rgba(74,158,255,.1)}
+.ch-item.ch-active .ch-clickable{background:rgba(74,158,255,.15)}
+.ch-item.ch-active .ch-name{color:var(--upcoming)}
+.ch-faded{opacity:.38}
+.ch-group-sep{font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--txt3);text-transform:uppercase;padding:8px 8px 3px;margin-top:4px;border-top:1px solid var(--b1)}
+
+/* ── Animations ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Responsive ── */
+@media(max-width:640px){
+  #sidebar{display:none}
+  .cards,.cards.live-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Status bar -->
+<div id="statusBar">
+  <div class="status-left">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">接続確認中...</span>
+    <span id="filterCount" style="font-size:11px;color:var(--upcoming);margin-left:6px"></span>
+    <span id="ohBadge" style="display:none;font-size:11px;color:var(--txt3);margin-left:6px;padding:2px 6px;border-radius:4px;border:1px solid var(--b2)">⏸ 稼働時間外</span>
+  </div>
+  <div class="status-right">
+    <span class="last-update" id="lastUpdate"></span>
+    <button class="sbar-btn" id="refreshBtn" onclick="manualRefresh()" title="今すぐ更新">↻</button>
+    <button class="sbar-btn" onclick="openStats()" title="API統計">📊</button>
+    <button class="sbar-btn" onclick="openSettings()" title="設定">⚙</button>
+  </div>
+</div>
+
+<!-- Server address banner (file:// mode) -->
+<div id="setupBanner">
+  <span>🌐 サーバーアドレス</span>
+  <div class="server-combo">
+    <select id="serverSelect" onchange="onServerSelectChange()"></select>
+    <input id="serverCustom" type="text" placeholder="http://192.168.x.x:8080" style="display:none"
+           onkeydown="if(event.key==='Enter')saveServer()">
+  </div>
+  <button onclick="saveServer()">接続</button>
+</div>
+
+<!-- Tag filter bar -->
+<div id="tagFilterBar"></div>
+
+<!-- Type filter panel -->
+<div id="typeFilterPanel">
+  <span class="type-filter-label">種別</span>
+</div>
+
+<!-- App -->
+<div class="app">
+  <aside id="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">チャンネル</span>
+      <button class="add-ch-btn" onclick="openAddChannel()" title="チャンネルを追加">＋</button>
+    </div>
+    <div id="channelList"><div class="sidebar-empty">チャンネルなし</div></div>
+  </aside>
+  <main id="main"><div id="content"></div></main>
+</div>
+
+<!-- ══ Add channel modal ══ -->
+<div class="overlay" id="addModal" onclick="if(event.target===this)closeModal('addModal')">
+  <div class="modal">
+    <div class="modal-title">チャンネルを追加</div>
+    <div class="fgroup">
+      <label>チャンネルURL / チャンネルID</label>
+      <input id="f-url" type="text" placeholder="https://www.youtube.com/@チャンネル名  または  https://www.twitch.tv/username" autocomplete="off">
+      <div class="hint">YouTube: @ハンドル / channel/ / UCで始まるID　／　Twitch: twitch.tv/ユーザー名（要Client ID設定）</div>
+    </div>
+    <div class="fgroup">
+      <label>タグ（複数可）</label>
+      <div class="tag-selector" id="add-tag-sel"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal('addModal')">キャンセル</button>
+      <button class="btn-primary" id="addBtn" onclick="submitAddChannel()">追加する</button>
+    </div>
+    <div class="modal-msg" id="addMsg"></div>
+  </div>
+</div>
+
+<!-- ══ Edit channel modal ══ -->
+<div class="overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
+  <div class="modal">
+    <div class="modal-title">チャンネルを編集</div>
+    <div class="fgroup">
+      <label>チャンネル名</label>
+      <input id="ec-name" type="text">
+    </div>
+    <div class="fgroup">
+      <label>タグ（複数可）</label>
+      <div class="tag-selector" id="edit-tag-sel"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal('editModal')">キャンセル</button>
+      <button class="btn-primary" onclick="saveEditChannel()">保存する</button>
+    </div>
+    <div class="modal-msg" id="editMsg"></div>
+  </div>
+</div>
+
+<!-- ══ Stats modal ══ -->
+<div class="overlay" id="statsModal" onclick="if(event.target===this)closeModal('statsModal')">
+  <div class="modal wide" style="max-width:600px">
+    <div class="modal-title">📊 API 使用統計</div>
+    <div id="statsContent" style="font-size:13px"></div>
+    <div class="modal-foot" style="margin-top:14px">
+      <button class="btn-cancel" onclick="closeModal('statsModal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Settings modal ══ -->
+<div class="overlay" id="settingsModal" onclick="if(event.target===this)closeModal('settingsModal')">
+  <div class="modal wide">
+    <div class="modal-title">⚙ 設定</div>
+
+    <div class="fgroup">
+      <label>YouTube Data API v3 キー</label>
+      <input id="s-apikey" type="password" placeholder="AIza...">
+      <div class="hint">未設定でも RSS で動画一覧は表示されます（ライブ/予定検出なし）</div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--twitch);margin-bottom:10px">Twitch</div>
+    <div class="fgroup">
+      <label>Twitch Client ID</label>
+      <input id="s-twitch-id" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxx">
+      <div class="hint"><a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener" style="color:var(--twitch)">Twitch Developer Console</a> でアプリを作成して取得</div>
+    </div>
+    <div class="fgroup">
+      <label>Twitch Client Secret</label>
+      <input id="s-twitch-secret" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxx">
+      <div class="hint">設定するとTwitchチャンネルの登録・配信取得が可能になります</div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="fgroup">
+      <label>更新間隔（秒）</label>
+      <input id="s-interval" type="number" min="60" max="3600" value="600">
+    </div>
+
+    <div class="fgroup">
+      <label>表示範囲（過去・日数）</label>
+      <input id="s-days-past" type="number" min="1" max="14" value="2">
+      <div class="hint">現在時刻より何日前まで表示するか（1〜14）</div>
+    </div>
+
+    <div class="fgroup">
+      <label>表示範囲（未来・日数）</label>
+      <input id="s-days-future" type="number" min="1" max="14" value="2">
+      <div class="hint">現在時刻より何日後まで表示するか（1〜14）</div>
+    </div>
+
+    <div class="fgroup" style="flex-direction:row;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <label style="margin-bottom:0">ページアクセス時に自動更新</label>
+        <div class="hint" style="margin-top:2px">ページを開いたとき即座にサーバーへ再取得リクエストを送ります</div>
+      </div>
+      <button id="autoRefreshToggle" class="toggle on" onclick="toggleAutoRefresh()"></button>
+    </div>
+    <div class="section-divider"></div>
+
+    <!-- Tag management -->
+    <div class="fgroup">
+      <label>タグ管理</label>
+      <div class="tag-manage-list" id="tagManageList"></div>
+      <div class="tag-add-row">
+        <input id="newTagInput" type="text" placeholder="新しいタグ名を入力"
+               onkeydown="if(event.key==='Enter')addTag()">
+        <button onclick="addTag()">追加</button>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Member keyword management -->
+    <div class="fgroup">
+      <label>メンバー限定キーワード</label>
+      <div class="hint" style="margin-bottom:6px">タイトルにこれらの文字列が含まれる場合「メンバー限定」に分類されます</div>
+      <div class="tag-manage-list" id="memberKeywordList"></div>
+      <div class="tag-add-row">
+        <input id="newKeywordInput" type="text" placeholder="キーワードを入力"
+               onkeydown="if(event.key==='Enter')addMemberKeyword()">
+        <button onclick="addMemberKeyword()">追加</button>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Shorts keyword management -->
+    <div class="fgroup">
+      <label>ショートキーワード</label>
+      <div class="hint" style="margin-bottom:6px">タイトルにこれらの文字列が含まれる場合「ショート」に分類されます（180秒以内の動画も自動判定）</div>
+      <div class="tag-manage-list" id="shortsKeywordList"></div>
+      <div class="tag-add-row">
+        <input id="newShortsKeywordInput" type="text" placeholder="キーワードを入力"
+               onkeydown="if(event.key==='Enter')addShortsKeyword()">
+        <button onclick="addShortsKeyword()">追加</button>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Operating hours -->
+    <div class="fgroup" style="flex-direction:row;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <label style="margin-bottom:0">稼働時間設定</label>
+        <div class="hint" style="margin-top:2px">稼働時間外は自動更新を一時停止します（手動更新・ページアクセス時の更新は常に有効）</div>
+      </div>
+      <button id="opHoursToggle" class="toggle" onclick="toggleOpHours()"></button>
+    </div>
+    <div id="opHoursConfig" style="display:none;margin-top:8px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="margin:0;font-size:12px;color:var(--txt2);white-space:nowrap">開始</label>
+          <input id="s-oh-start" type="time" value="08:00"
+            style="padding:5px 8px;border-radius:6px;border:1px solid var(--b2);background:var(--surf2);color:var(--txt);font-size:13px;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="margin:0;font-size:12px;color:var(--txt2);white-space:nowrap">終了</label>
+          <input id="s-oh-end" type="time" value="23:00"
+            style="padding:5px 8px;border-radius:6px;border:1px solid var(--b2);background:var(--surf2);color:var(--txt);font-size:13px;outline:none">
+        </div>
+      </div>
+      <div class="hint" style="margin-top:6px">終了が開始より早い場合は深夜をまたぐ設定（例: 22:00〜02:00）</div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Server address (file:// mode) -->
+    <div id="serverAddrRow" style="display:none">
+      <div class="fgroup">
+        <label>デスクトップ PC のサーバーアドレス</label>
+        <select id="s-server-select" onchange="onSettingsServerChange()" style="margin-bottom:6px"></select>
+        <input id="s-server-custom" type="text" placeholder="http://192.168.x.x:8080" style="display:none">
+        <div class="hint">ノート PC から OneDrive の HTML を開く場合に設定</div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal('settingsModal')">キャンセル</button>
+      <button class="btn-primary" onclick="saveSettings()">保存</button>
+    </div>
+    <div class="modal-msg" id="settingsMsg"></div>
+    <div id="s-build-info" style="text-align:center;font-size:11px;color:var(--txt3);padding:10px 0 2px;border-top:1px solid var(--b1);margin-top:10px;letter-spacing:.4px"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   Constants
+═══════════════════════════════════════════════════ */
+const IS_FILE = location.protocol === 'file:';
+const TYPE_CFG = {
+  live:     {label:'● LIVE',    cls:'type-live',    sec:'live',     order:0},
+  upcoming: {label:'配信予定',  cls:'type-upcoming', sec:'upcoming', order:1},
+  premiere: {label:'プレミア',  cls:'type-premiere', sec:'premiere', order:1},
+  member:   {label:'メンバー限定',cls:'type-member', sec:'member',   order:2},
+  archive:  {label:'アーカイブ',cls:'type-archive',  sec:'video',    order:3},
+  short:    {label:'ショート',  cls:'type-short',    sec:'video',    order:3},
+  video:    {label:'動画',      cls:'type-video',    sec:'video',    order:3},
+};
+const SEC_LABEL = {
+  live:    '🔴 現在配信中',
+  upcoming:'🔵 配信予定',
+  premiere:'🟣 プレミア公開',
+  member:  '🔒 メンバー限定',
+  video:   '📼 動画 / アーカイブ / ショート',
+};
+const TYPE_DEFS = [
+  {key:'live',     label:'LIVE中',      color:'var(--live)'},
+  {key:'upcoming', label:'配信予定',    color:'var(--upcoming)'},
+  {key:'premiere', label:'プレミア公開',color:'var(--premiere)'},
+  {key:'member',   label:'メンバー限定',color:'#eab308'},
+  {key:'archive',  label:'アーカイブ',  color:'var(--archive)'},
+  {key:'short',    label:'ショート',    color:'var(--short)'},
+  {key:'video',    label:'動画',        color:'var(--video)'},
+];
+const PLATFORM_DEFS = [
+  {key:'youtube', label:'YouTube', color:'var(--live)'},
+  {key:'twitch',  label:'Twitch',  color:'var(--twitch)'},
+];
+
+/* ═══════════════════════════════════════════════════
+   State
+═══════════════════════════════════════════════════ */
+let BASE = '';
+let _channels = [], _streams = [], _tags = [], _memberKeywords = [], _shortsKeywords = [];
+let _autoRefreshOnLoad = localStorage.getItem('haisin_auto_refresh_on_load') !== 'false';
+let _tagFilters = new Set(); // empty = all
+let _tagFilterMode = localStorage.getItem('haisin_tag_filter_mode') || 'OR'; // 'OR' | 'AND'
+let _typeFilters     = new Set(TYPE_DEFS.map(d => d.key));
+let _platformFilters = new Set(PLATFORM_DEFS.map(d => d.key));
+let _editingChId = null;
+let _channelFilter = null; // null = all, channelId string = single channel
+
+/* ═══════════════════════════════════════════════════
+   Server address helpers
+═══════════════════════════════════════════════════ */
+function getServerList() {
+  try { return JSON.parse(localStorage.getItem('haisin_servers') || '[]'); } catch { return []; }
+}
+function addToServerList(addr) {
+  const list = getServerList().filter(v => v !== addr);
+  list.unshift(addr);
+  localStorage.setItem('haisin_servers', JSON.stringify(list.slice(0, 10)));
+  localStorage.setItem('haisin_server', addr);
+}
+function buildServerSelect(selId, customId, current) {
+  const list = getServerList();
+  const sel  = document.getElementById(selId);
+  const cust = document.getElementById(customId);
+  const opts = (current && !list.includes(current)) ? [current, ...list] : list;
+  sel.innerHTML = (opts.length
+    ? opts.map(v => `<option value="${esc(v)}"${v===current?' selected':''}>${esc(v)}</option>`).join('')
+    : '') + '<option value="__new__">＋ 新しいアドレスを入力...</option>';
+  cust.style.display = (!opts.length || sel.value === '__new__') ? 'block' : 'none';
+}
+function getServerComboValue(selId, customId) {
+  const sel = document.getElementById(selId);
+  return (sel.value === '__new__'
+    ? document.getElementById(customId).value
+    : sel.value).trim().replace(/\/$/, '');
+}
+function initBase() {
+  if (!IS_FILE) { BASE = ''; return true; }
+  const saved = localStorage.getItem('haisin_server');
+  buildServerSelect('serverSelect', 'serverCustom', saved || '');
+  if (saved) { BASE = saved; return true; }
+  document.getElementById('setupBanner').style.display = 'flex';
+  return false;
+}
+function onServerSelectChange() {
+  const isNew = document.getElementById('serverSelect').value === '__new__';
+  document.getElementById('serverCustom').style.display = isNew ? 'block' : 'none';
+  if (isNew) document.getElementById('serverCustom').focus();
+}
+function onSettingsServerChange() {
+  const isNew = document.getElementById('s-server-select').value === '__new__';
+  document.getElementById('s-server-custom').style.display = isNew ? 'block' : 'none';
+  if (isNew) document.getElementById('s-server-custom').focus();
+}
+function saveServer() {
+  const v = getServerComboValue('serverSelect', 'serverCustom');
+  if (!v) return;
+  BASE = v; addToServerList(v);
+  document.getElementById('setupBanner').style.display = 'none';
+  init();
+}
+
+/* ═══════════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════════ */
+async function api(method, path, body) {
+  const opts = {method, headers:{}};
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(BASE + path, opts);
+  if (!res.ok) { let e={}; try{e=await res.json()}catch{}; throw new Error(e.error || res.statusText); }
+  return res.json();
+}
+
+/* ═══════════════════════════════════════════════════
+   Status bar
+═══════════════════════════════════════════════════ */
+let _hasApiKey = false;
+async function checkStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    _hasApiKey = s.hasApiKey;
+    document.getElementById('statusDot').className  = 'status-dot connected';
+    document.getElementById('statusText').textContent = `接続中 — ${s.channelCount} ch / ${s.streamCount} 件`;
+    if (s.lastUpdated)
+      document.getElementById('lastUpdate').textContent = '更新: ' + fmtRel(new Date(s.lastUpdated));
+    const ohEnabled = s.operatingHours?.enabled;
+    document.getElementById('ohBadge').style.display = (ohEnabled && !s.inOperatingHours) ? 'inline-block' : 'none';
+    return s;
+  } catch {
+    document.getElementById('statusDot').className  = 'status-dot error';
+    document.getElementById('statusText').textContent = 'サーバーに接続できません';
+    document.getElementById('lastUpdate').textContent = '';
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Tags
+═══════════════════════════════════════════════════ */
+async function loadTags() {
+  try { _tags = await api('GET', '/api/tags'); renderTagFilterBar(); } catch {}
+}
+
+function renderTagFilterBar() {
+  const bar = document.getElementById('tagFilterBar');
+  const panelOpen = document.getElementById('typeFilterPanel')?.classList.contains('open');
+  const allTypesOn = _typeFilters.size === TYPE_DEFS.length && _platformFilters.size === PLATFORM_DEFS.length;
+  bar.innerHTML =
+    `<button id="typeFilterToggle" class="tag-chip${!allTypesOn?' active':''}" onclick="toggleTypeFilterPanel()" style="flex-shrink:0">${!allTypesOn?'● ':''}絞り込み ${panelOpen?'▴':'▾'}</button>`
+    + `<span class="tf-sep"></span>`
+    + `<button class="tag-chip${_tagFilters.size===0?' active':''}" onclick="setTagFilter(null)">すべて</button>`
+    + _tags.map(t =>
+      `<button class="tag-chip${_tagFilters.has(t)?' active':''}" onclick="setTagFilter('${esc(t)}')">${esc(t)}</button>`
+    ).join('')
+    + `<span class="tf-sep"></span>`
+    + `<button class="tag-chip${_tagFilterMode==='OR'?' active':''}" onclick="toggleTagFilterMode('OR')" style="flex-shrink:0">OR</button>`
+    + `<button class="tag-chip${_tagFilterMode==='AND'?' active':''}" onclick="toggleTagFilterMode('AND')" style="flex-shrink:0">AND</button>`;
+}
+
+function setTagFilter(tag) {
+  if (tag === null) {
+    _tagFilters.clear();
+  } else if (_tagFilters.has(tag)) {
+    _tagFilters.delete(tag);
+  } else {
+    _tagFilters.add(tag);
+  }
+  _channelFilter = null; // タグ絞り込みを触ったら個人モード解除
+  renderTagFilterBar();
+  renderChannels();
+  renderStreams();
+}
+
+function toggleTagFilterMode(mode) {
+  _tagFilterMode = mode;
+  localStorage.setItem('haisin_tag_filter_mode', _tagFilterMode);
+  renderTagFilterBar();
+  renderChannels();
+  renderStreams();
+}
+
+/* ═══════════════════════════════════════════════════
+   Type filter
+═══════════════════════════════════════════════════ */
+function toggleTypeFilterPanel() {
+  const panel = document.getElementById('typeFilterPanel');
+  panel.classList.toggle('open');
+  renderTagFilterBar();
+  if (panel.classList.contains('open')) renderTypeFilterPanel();
+}
+
+function renderTypeFilterPanel() {
+  const panel = document.getElementById('typeFilterPanel');
+  panel.innerHTML = `<span class="type-filter-label">種別</span>`
+    + TYPE_DEFS.map(d => {
+        const on = _typeFilters.has(d.key);
+        return `<button class="type-chip${on?' on':''}" onclick="toggleTypeFilter('${d.key}')">
+          <span class="tc-dot" style="background:${on ? d.color : 'var(--txt3)'}"></span>${d.label}
+        </button>`;
+      }).join('')
+    + `<span class="tf-sep"></span>
+       <button class="type-chip-all" onclick="setAllTypeFilters(true)">すべて</button>
+       <button class="type-chip-all" onclick="setAllTypeFilters(false)">解除</button>`
+    + `<span class="tf-sep"></span><span class="type-filter-label">プラットフォーム</span>`
+    + PLATFORM_DEFS.map(d => {
+        const on = _platformFilters.has(d.key);
+        return `<button class="type-chip${on?' on':''}" onclick="togglePlatformFilter('${d.key}')">
+          <span class="tc-dot" style="background:${on ? d.color : 'var(--txt3)'}"></span>${d.label}
+        </button>`;
+      }).join('');
+}
+
+function saveTypeFilters() {
+  localStorage.setItem('haisin_type_filters', JSON.stringify([..._typeFilters]));
+  localStorage.setItem('haisin_platform_filters', JSON.stringify([..._platformFilters]));
+}
+
+function loadTypeFilters() {
+  try {
+    const saved = localStorage.getItem('haisin_type_filters');
+    if (saved) {
+      const keys = JSON.parse(saved);
+      _typeFilters = new Set(TYPE_DEFS.map(d => d.key).filter(k => keys.includes(k)));
+    }
+    const savedP = localStorage.getItem('haisin_platform_filters');
+    if (savedP) {
+      const keys = JSON.parse(savedP);
+      _platformFilters = new Set(PLATFORM_DEFS.map(d => d.key).filter(k => keys.includes(k)));
+    }
+  } catch {}
+}
+
+function toggleTypeFilter(key) {
+  if (_typeFilters.has(key)) _typeFilters.delete(key);
+  else _typeFilters.add(key);
+  saveTypeFilters();
+  renderTypeFilterPanel();
+  renderStreams();
+}
+
+function setAllTypeFilters(on) {
+  if (on) TYPE_DEFS.forEach(d => _typeFilters.add(d.key));
+  else _typeFilters.clear();
+  saveTypeFilters();
+  renderTypeFilterPanel();
+  renderStreams();
+}
+
+function togglePlatformFilter(key) {
+  if (_platformFilters.has(key)) _platformFilters.delete(key);
+  else _platformFilters.add(key);
+  saveTypeFilters();
+  renderTypeFilterPanel();
+  renderStreams();
+}
+
+function renderTagSelector(containerId, selectedTags) {
+  const wrap = document.getElementById(containerId);
+  const chips = _tags.map(t => {
+    const sel = selectedTags.includes(t);
+    return `<button type="button" class="tag-option${sel?' sel':''}" onclick="toggleTagOption(this)">${esc(t)}</button>`;
+  }).join('');
+  const inlineId = containerId + '-new';
+  wrap.innerHTML = chips
+    + `<div class="tag-inline-add">
+         <input id="${inlineId}" type="text" placeholder="＋ 新規タグ"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();addTagInline('${containerId}')}"
+                maxlength="20">
+         <button type="button" onclick="addTagInline('${containerId}')">追加</button>
+       </div>`;
+}
+
+function toggleTagOption(btn) { btn.classList.toggle('sel'); }
+
+async function addTagInline(containerId) {
+  const inputId = containerId + '-new';
+  const input = document.getElementById(inputId);
+  const name  = input.value.trim();
+  if (!name) { input.focus(); return; }
+  if (_tags.includes(name)) {
+    // already exists — just select it
+    const existing = [...document.getElementById(containerId).querySelectorAll('.tag-option')]
+      .find(b => b.textContent === name);
+    if (existing && !existing.classList.contains('sel')) existing.classList.add('sel');
+    input.value = '';
+    return;
+  }
+  try {
+    const current = getSelectedTags(containerId);
+    _tags = await api('POST', '/api/tags', {name});
+    renderTagSelector(containerId, [...current, name]); // re-render with new tag selected
+    renderTagFilterBar();
+    renderTagManageList();
+  } catch(e) { alert(e.message); }
+}
+
+function getSelectedTags(containerId) {
+  return [...document.getElementById(containerId).querySelectorAll('.tag-option.sel')]
+    .map(b => b.textContent);
+}
+
+function renderTagManageList() {
+  const wrap = document.getElementById('tagManageList');
+  if (!_tags.length) { wrap.innerHTML = '<span style="font-size:12px;color:var(--txt3)">タグなし</span>'; return; }
+  wrap.innerHTML = _tags.map((t, i) =>
+    `<div class="tag-manage-item">
+      <div style="display:flex;flex-direction:column;gap:1px;margin-right:4px">
+        <button class="tag-remove-btn" onclick="moveTag(${i},-1)" title="上へ" style="font-size:9px" ${i===0?'disabled':''}>▲</button>
+        <button class="tag-remove-btn" onclick="moveTag(${i},1)"  title="下へ" style="font-size:9px" ${i===_tags.length-1?'disabled':''}>▼</button>
+      </div>
+      ${esc(t)}<button class="tag-remove-btn" onclick="deleteTag('${esc(t)}')" title="削除">✕</button>
+    </div>`
+  ).join('');
+}
+
+async function moveTag(idx, dir) {
+  const newOrder = [..._tags];
+  const target = idx + dir;
+  if (target < 0 || target >= newOrder.length) return;
+  [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
+  try {
+    _tags = await api('POST', '/api/tags/reorder', {order: newOrder});
+    renderTagManageList();
+    renderTagFilterBar();
+  } catch(e) { alert(e.message); }
+}
+
+async function addTag() {
+  const input = document.getElementById('newTagInput');
+  const name  = input.value.trim();
+  if (!name) return;
+  try {
+    _tags = await api('POST', '/api/tags', {name});
+    input.value = '';
+    renderTagManageList();
+    renderTagFilterBar();
+  } catch (e) { alert(e.message); }
+}
+
+async function deleteTag(name) {
+  if (!confirm(`タグ「${name}」を削除しますか？\nチャンネルからも削除されます。`)) return;
+  try {
+    _tags = await api('DELETE', `/api/tags/${encodeURIComponent(name)}`);
+    renderTagManageList();
+    renderTagFilterBar();
+    await loadChannels();
+  } catch (e) { alert(e.message); }
+}
+
+/* ── Member keyword management ── */
+function renderMemberKeywordList() {
+  const wrap = document.getElementById('memberKeywordList');
+  if (!wrap) return;
+  if (!_memberKeywords.length) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--txt3)">キーワードなし</span>'; return;
+  }
+  wrap.innerHTML = _memberKeywords.map((kw, i) =>
+    `<div class="tag-manage-item">
+      ${esc(kw)}<button class="tag-remove-btn" onclick="deleteMemberKeyword(${i})" title="削除">✕</button>
+    </div>`
+  ).join('');
+}
+
+function deleteMemberKeyword(idx) {
+  _memberKeywords.splice(idx, 1);
+  renderMemberKeywordList();
+}
+
+function addMemberKeyword() {
+  const input = document.getElementById('newKeywordInput');
+  const kw = input.value.trim();
+  if (!kw) return;
+  if (!_memberKeywords.includes(kw)) _memberKeywords.push(kw);
+  input.value = '';
+  renderMemberKeywordList();
+  input.focus();
+}
+
+function renderShortsKeywordList() {
+  const wrap = document.getElementById('shortsKeywordList');
+  if (!wrap) return;
+  if (!_shortsKeywords.length) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--txt3)">キーワードなし</span>'; return;
+  }
+  wrap.innerHTML = _shortsKeywords.map((kw, i) =>
+    `<div class="tag-manage-item">
+      ${esc(kw)}<button class="tag-remove-btn" onclick="deleteShortsKeyword(${i})" title="削除">✕</button>
+    </div>`
+  ).join('');
+}
+
+function deleteShortsKeyword(idx) {
+  _shortsKeywords.splice(idx, 1);
+  renderShortsKeywordList();
+}
+
+function toggleAutoRefresh() {
+  _autoRefreshOnLoad = !_autoRefreshOnLoad;
+  document.getElementById('autoRefreshToggle').className = 'toggle' + (_autoRefreshOnLoad ? ' on' : '');
+}
+
+let _opHoursEnabled = false;
+function toggleOpHours() {
+  _opHoursEnabled = !_opHoursEnabled;
+  document.getElementById('opHoursToggle').className = 'toggle' + (_opHoursEnabled ? ' on' : '');
+  document.getElementById('opHoursConfig').style.display = _opHoursEnabled ? 'block' : 'none';
+}
+
+function addShortsKeyword() {
+  const input = document.getElementById('newShortsKeywordInput');
+  const kw = input.value.trim();
+  if (!kw) return;
+  if (!_shortsKeywords.includes(kw)) _shortsKeywords.push(kw);
+  input.value = '';
+  renderShortsKeywordList();
+  input.focus();
+}
+
+/* ═══════════════════════════════════════════════════
+   Channels
+═══════════════════════════════════════════════════ */
+async function loadChannels() {
+  try { _channels = await api('GET', '/api/channels'); renderChannels(); } catch {}
+}
+
+function renderChannels() {
+  const list = document.getElementById('channelList');
+  if (!_channels.length) {
+    list.innerHTML = '<div class="sidebar-empty">＋ でチャンネルを追加</div>'; return;
+  }
+  function chItemHTML(ch, idx, faded) {
+    const tags = ch.tags || [];
+    const active = _channelFilter === ch.id;
+    const imgEl = ch.thumbnail
+      ? `<img class="ch-avatar" src="${esc(ch.thumbnail)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">
+         <div class="ch-avatar-init" style="display:none">${esc((ch.name||'?')[0])}</div>`
+      : `<div class="ch-avatar-init">${esc((ch.name||'?')[0])}</div>`;
+    const tagPips = tags.map(t => `<span class="ch-tag-pip">${esc(t)}</span>`).join('');
+    const platDot = ch.platform === 'twitch'
+      ? `<span class="ch-platform-dot ch-platform-twitch" title="Twitch"></span>` : '';
+    return `<div class="ch-item${active?' ch-active':''}${faded?' ch-faded':''}" draggable="true"
+              ondragstart="onDragStart(event,${idx})"
+              ondragover="onDragOver(event,${idx})"
+              ondrop="onDrop(event,${idx})"
+              ondragend="onDragEnd()"
+              id="chi-${esc(ch.id)}">
+      <span class="drag-handle" title="ドラッグで並び替え">⠿</span>
+      <div class="ch-clickable" onclick="setChannelFilter('${esc(ch.id)}')">
+        ${imgEl}
+        <div style="flex:1;min-width:0">
+          <div class="ch-name" title="${esc(ch.name)}">${esc(ch.name)}${platDot}</div>
+          ${tagPips ? `<div class="ch-tags-row">${tagPips}</div>` : ''}
+        </div>
+      </div>
+      <div class="ch-actions">
+        <a class="ch-action-btn" href="${esc(ch.url)}" target="_blank" rel="noopener" title="チャンネルへ" style="text-decoration:none">↗</a>
+        <button class="ch-action-btn edit" onclick="openEditChannel('${esc(ch.id)}')" title="編集">✏</button>
+        <button class="ch-action-btn del"  onclick="deleteChannel('${esc(ch.id)}')" title="削除">✕</button>
+      </div>
+    </div>`;
+  }
+
+  // Split channels by tag filter for sidebar grouping
+  let inFilter = _channels, outFilter = [];
+  if (_tagFilters.size > 0) {
+    const tags = [..._tagFilters];
+    const match = _tagFilterMode === 'AND'
+      ? c => tags.every(t => (c.tags||[]).includes(t))
+      : c => tags.some(t  => (c.tags||[]).includes(t));
+    inFilter  = _channels.filter(match);
+    outFilter = _channels.filter(c => !inFilter.includes(c));
+  }
+
+  const inHTML  = inFilter.map((ch, i) => chItemHTML(ch, _channels.indexOf(ch), false)).join('');
+  const outHTML = outFilter.length
+    ? `<div class="ch-group-sep">タグ外</div>` + outFilter.map(ch => chItemHTML(ch, _channels.indexOf(ch), true)).join('')
+    : '';
+  list.innerHTML = inHTML + outHTML;
+}
+
+/* Drag & drop reorder */
+let _dragIdx = null;
+function onDragStart(e, idx) {
+  _dragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => document.querySelectorAll('.ch-item')[idx]?.classList.add('dragging'), 0);
+}
+function onDragOver(e, idx) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.ch-item').forEach((el, i) => el.classList.toggle('drag-over', i === idx && i !== _dragIdx));
+}
+function onDrop(e, idx) {
+  e.preventDefault();
+  if (_dragIdx === null || _dragIdx === idx) { onDragEnd(); return; }
+  const moved = _channels.splice(_dragIdx, 1)[0];
+  _channels.splice(idx, 0, moved);
+  renderChannels();
+  api('POST', '/api/channels/reorder', {ids: _channels.map(c => c.id)}).catch(()=>{});
+  _dragIdx = null;
+}
+function onDragEnd() {
+  _dragIdx = null;
+  document.querySelectorAll('.ch-item').forEach(el => el.classList.remove('dragging','drag-over'));
+}
+
+async function deleteChannel(id) {
+  const ch = _channels.find(c => c.id === id);
+  if (!confirm(`「${ch?.name||id}」を削除しますか？`)) return;
+  try {
+    await api('DELETE', `/api/channels/${id}`);
+    await Promise.all([loadChannels(), loadStreams()]);
+  } catch(e) { alert('削除失敗: ' + e.message); }
+}
+
+/* ═══════════════════════════════════════════════════
+   Add channel
+═══════════════════════════════════════════════════ */
+function openAddChannel() {
+  document.getElementById('f-url').value = '';
+  renderTagSelector('add-tag-sel', []);
+  showMsg('addMsg','','');
+  setBtn('addBtn','追加する',false);
+  openModal('addModal');
+  setTimeout(() => document.getElementById('f-url').focus(), 100);
+}
+
+async function submitAddChannel() {
+  const url  = document.getElementById('f-url').value.trim();
+  const tags = getSelectedTags('add-tag-sel');
+  if (!url) { showMsg('addMsg','URLを入力してください','error'); return; }
+  setBtn('addBtn','<span class="loading-inline"></span>取得中...', true);
+  showMsg('addMsg','チャンネル情報を取得中...','info');
+  try {
+    const ch = await api('POST', '/api/channels', {url, tags});
+    showMsg('addMsg', `「${ch.name}」を登録しました！`, 'info');
+    setTimeout(() => closeModal('addModal'), 1100);
+    await Promise.all([loadChannels(), loadStreams()]);
+  } catch(e) {
+    showMsg('addMsg', e.message, 'error');
+    setBtn('addBtn','追加する', false);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Edit channel
+═══════════════════════════════════════════════════ */
+function openEditChannel(id) {
+  const ch = _channels.find(c => c.id === id);
+  if (!ch) return;
+  _editingChId = id;
+  document.getElementById('ec-name').value = ch.name || '';
+  renderTagSelector('edit-tag-sel', ch.tags || []);
+  showMsg('editMsg','','');
+  openModal('editModal');
+  setTimeout(() => document.getElementById('ec-name').focus(), 100);
+}
+
+async function saveEditChannel() {
+  if (!_editingChId) return;
+  const name = document.getElementById('ec-name').value.trim();
+  const tags = getSelectedTags('edit-tag-sel');
+  if (!name) { showMsg('editMsg','名前を入力してください','error'); return; }
+  try {
+    await api('PUT', `/api/channels/${_editingChId}`, {name, tags});
+    closeModal('editModal');
+    await loadChannels();
+    renderStreams(); // update card colors/names from cache
+  } catch(e) { showMsg('editMsg', e.message, 'error'); }
+}
+
+/* ═══════════════════════════════════════════════════
+   Streams
+═══════════════════════════════════════════════════ */
+async function loadStreams() {
+  try { _streams = await api('GET', '/api/streams'); renderStreams(); } catch {}
+}
+
+function setChannelFilter(id) {
+  _channelFilter = (_channelFilter === id) ? null : id;
+  renderChannels();
+  renderStreams();
+}
+
+function getFilteredChannelIds() {
+  if (_channelFilter) return new Set([_channelFilter]);
+  if (_tagFilters.size === 0) return null;
+  const tags = [..._tagFilters];
+  const match = _tagFilterMode === 'AND'
+    ? c => tags.every(t => (c.tags||[]).includes(t))
+    : c => tags.some(t  => (c.tags||[]).includes(t));
+  return new Set(_channels.filter(match).map(c => c.id));
+}
+
+function renderStreams() {
+  const wrap = document.getElementById('content');
+  if (!_channels.length) { wrap.innerHTML = wizardHTML(); return; }
+
+  const allowedIds = getFilteredChannelIds();
+  let list = _streams.filter(s => allowedIds === null || allowedIds.has(s.channelId));
+
+  // Type filter
+  const allTypesOn = _typeFilters.size === TYPE_DEFS.length;
+  if (!allTypesOn) {
+    list = list.filter(s => _typeFilters.has(s.type || 'video'));
+  }
+
+  // Platform filter
+  const allPlatformsOn = _platformFilters.size === PLATFORM_DEFS.length;
+  if (!allPlatformsOn) {
+    list = list.filter(s => _platformFilters.has(s.platform || 'youtube'));
+  }
+
+  list = list.slice().sort((a,b) => {
+    const oa = (TYPE_CFG[a.type]||TYPE_CFG.video).order;
+    const ob = (TYPE_CFG[b.type]||TYPE_CFG.video).order;
+    if (oa !== ob) return oa - ob;
+    const ta = new Date(a.scheduledAt||a.publishedAt||0);
+    const tb = new Date(b.scheduledAt||b.publishedAt||0);
+    return oa <= 1 ? ta - tb : tb - ta;
+  });
+
+  const groups = {};
+  for (const s of list) {
+    const sec = (TYPE_CFG[s.type]||TYPE_CFG.video).sec;
+    (groups[sec] = groups[sec]||[]).push(s);
+  }
+
+  let html = '';
+  if (!_hasApiKey)
+    html += `<div class="notice">⚠ YouTube API Key 未設定。RSS のみのため LIVE・配信予定が検出されません。
+      <a onclick="openSettings()">⚙設定</a> から API キーを登録してください。</div>`;
+
+  let any = false;
+  for (const sec of ['live','upcoming','premiere','member','video']) {
+    const items = groups[sec];
+    if (!items?.length) continue;
+    any = true;
+    html += `<div class="section">
+      <div class="section-head">
+        <span class="section-label${sec==='live'?' live':''}">${SEC_LABEL[sec]}</span>
+        <span class="section-count">${items.length}</span>
+      </div>
+      <div class="cards${sec==='live'?' live-grid':''}">${items.map(cardHTML).join('')}</div>
+    </div>`;
+  }
+  if (!any) {
+    const tagLabel = _tagFilters.size
+      ? `「${[..._tagFilters].join(_tagFilterMode === 'AND' ? ' AND ' : '・')}」タグのチャンネルに` : '';
+    const reason = tagLabel;
+    const typeOff = !allTypesOn ? '（絞り込み中）' : '';
+    html += `<div class="empty-state"><div class="empty-icon">📡</div>
+      <p>${reason}表示するコンテンツがありません${typeOff}</p></div>`;
+  }
+
+  wrap.innerHTML = html;
+
+  // ステータスバーの絞り込み件数表示
+  const fcEl = document.getElementById('filterCount');
+  if (fcEl) {
+    const total = _streams.length;
+    const shown = list.length;
+    const isFiltered = !allTypesOn || _tagFilters.size > 0 || _channelFilter !== null;
+    fcEl.textContent = isFiltered && shown < total ? `(${shown} / ${total} 件)` : '';
+  }
+}
+
+function cardHTML(s) {
+  const tc    = TYPE_CFG[s.type] || TYPE_CFG.video;
+  const isTwitch = s.platform === 'twitch';
+  const thumb = s.thumbnail || (isTwitch
+    ? 'https://static-cdn.jtvnw.net/ttv-static/404_preview-640x360.jpg'
+    : `https://i.ytimg.com/vi/${s.id}/mqdefault.jpg`);
+  const thumbErr = isTwitch
+    ? ''
+    : `onerror="this.src='https://i.ytimg.com/vi/${s.id}/default.jpg'"`;
+  const dur   = fmtDuration(s.duration);
+  const t     = fmtCardTime(s);
+  const init  = (s.channelName||'?')[0].toUpperCase();
+  const chImg = s.channelThumbnail
+    ? `<img class="card-ch-img" src="${esc(s.channelThumbnail)}"
+           onerror="this.style.display='none';this.nextSibling.style.display='flex'">
+       <div class="card-ch-init" style="display:none">${esc(init)}</div>`
+    : `<div class="card-ch-init">${esc(init)}</div>`;
+  const platBadge = isTwitch
+    ? `<span class="platform-badge platform-twitch">Twitch</span>` : '';
+  return `<div class="card ${s.type||''}${isTwitch?' twitch-card':''}">
+    <a class="thumb-wrap" href="${esc(s.url)}" target="_blank" rel="noopener">
+      <img class="card-thumb" src="${esc(thumb)}" loading="lazy" ${thumbErr}>
+      <div class="thumb-overlay"><div class="play-circle">▶</div></div>
+      <span class="type-badge ${tc.cls}">${tc.label}</span>
+      ${platBadge}
+      ${dur?`<span class="duration-badge">${esc(dur)}</span>`:''}
+    </a>
+    <div class="card-body">
+      <div class="card-ch">${chImg}<span class="card-ch-name">${esc(s.channelName||'')}</span></div>
+      <div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div>
+      <div class="card-time${s.type==='live'?' live-t':t.soon?' soon-t':''}">${esc(t.text)}</div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   Settings
+═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   Stats
+═══════════════════════════════════════════════════ */
+async function openStats() {
+  const el = document.getElementById('statsContent');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt3)">読み込み中...</div>';
+  openModal('statsModal');
+  try {
+    const s = await api('GET', '/api/stats');
+    el.innerHTML = renderStats(s);
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--live)">取得失敗: ${e.message}</div>`;
+  }
+}
+
+function renderStats(s) {
+  const QUOTA_LIMIT = 10000;
+  const LABELS = {
+    rss:              { name: 'RSS フィード',            quota: false },
+    oembed:           { name: 'oembed (チャンネル解決)', quota: false },
+    videos_list:      { name: 'videos.list',             quota: true, unit: 1 },
+    resolve:          { name: 'YouTubeチャンネル登録',   quota: false },
+    twitch_resolve:   { name: 'Twitchチャンネル登録',   quota: false },
+    twitch_streams:   { name: 'Twitch streams',          quota: false },
+    twitch_schedule:  { name: 'Twitch schedule',         quota: false },
+    twitch_videos:    { name: 'Twitch videos (VOD)',     quota: false },
+  };
+
+  function pct(n, d) { return d > 0 ? Math.round(n/d*100) : 0; }
+  function bar(used, total, color='var(--upcoming)') {
+    const p = Math.min(100, Math.round(used/total*100));
+    const c = p >= 90 ? 'var(--live)' : p >= 70 ? '#f59e0b' : color;
+    return `<div style="height:6px;border-radius:3px;background:var(--b2);margin-top:4px">
+      <div style="height:6px;border-radius:3px;background:${c};width:${p}%"></div></div>`;
+  }
+  function row(label, d, isQuota, unit=1) {
+    const sr = d ? pct(d.ok, d.calls) : 0;
+    const quota = d ? d.quota : 0;
+    return `<tr>
+      <td style="padding:7px 10px 7px 0;color:var(--txt2)">${label}</td>
+      <td style="padding:7px 6px;text-align:right;color:var(--txt)">${d ? d.calls : 0}</td>
+      <td style="padding:7px 6px;text-align:right;color:var(--green)">${d ? d.ok : 0}</td>
+      <td style="padding:7px 6px;text-align:right;color:var(--live)">${d ? d.fail : 0}</td>
+      <td style="padding:7px 0 7px 6px;text-align:right;color:var(--txt3)">${d && d.calls ? sr+'%' : '—'}</td>
+      ${isQuota ? `<td style="padding:7px 0 7px 10px;text-align:right;color:var(--txt3)">${quota}</td>` : '<td></td>'}
+    </tr>`;
+  }
+
+  const daily = s.daily || {};
+  const total = s.total || {};
+  const history = s.history || [];
+
+  // daily quota total
+  const dailyQuota = (daily.videos_list?.quota||0);
+  const totalQuota = (total.videos_list?.quota||0);
+
+  const thead = `<tr style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">
+    <th style="text-align:left;padding-bottom:6px">種別</th>
+    <th style="text-align:right;padding-bottom:6px">回数</th>
+    <th style="text-align:right;padding-bottom:6px">成功</th>
+    <th style="text-align:right;padding-bottom:6px">失敗</th>
+    <th style="text-align:right;padding-bottom:6px">成功率</th>
+    <th style="text-align:right;padding-bottom:6px">クォータ</th>
+  </tr>`;
+
+  let rows = '';
+  for (const [key, cfg] of Object.entries(LABELS)) {
+    rows += row(cfg.name, daily[key], cfg.quota, cfg.unit||1);
+  }
+  let trows = '';
+  for (const [key, cfg] of Object.entries(LABELS)) {
+    trows += row(cfg.name, total[key], cfg.quota, cfg.unit||1);
+  }
+
+  // history chart (last 14 days)
+  const hist14 = history.slice(-14);
+  let histHtml = '';
+  if (hist14.length > 0) {
+    const maxQ = Math.max(...hist14.map(h => (h.videos_list?.quota||0)), 1);
+    histHtml = `<div style="margin-top:18px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--txt3);margin-bottom:8px">過去のクォータ使用量（日別）</div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:60px;padding-bottom:4px">
+        ${hist14.map(h => {
+          const q = (h.videos_list?.quota||0);
+          const hp = Math.max(2, Math.round(q/Math.max(maxQ,1)*56));
+          const over = q > QUOTA_LIMIT;
+          const c = over ? 'var(--live)' : q > QUOTA_LIMIT*0.7 ? '#f59e0b' : 'var(--upcoming)';
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${h.date}: ${q}">
+            <div style="width:100%;height:${hp}px;background:${c};border-radius:2px 2px 0 0;min-width:4px"></div>
+            <div style="font-size:9px;color:var(--txt3);writing-mode:vertical-rl;transform:rotate(180deg)">${h.date.slice(5)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div style="margin-bottom:6px;font-size:11px;color:var(--txt3)">集計日: ${s.date || '—'}</div>
+
+    <div style="background:var(--surf2);border:1px solid var(--b2);border-radius:8px;padding:10px 14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">本日のクォータ使用量（上限 10,000）</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span style="font-size:22px;font-weight:700;color:${dailyQuota>9000?'var(--live)':dailyQuota>7000?'#f59e0b':'var(--txt)'}">${dailyQuota.toLocaleString()}</span>
+        <span style="font-size:12px;color:var(--txt3)">/ 10,000 (${pct(dailyQuota,QUOTA_LIMIT)}%)</span>
+      </div>
+      ${bar(dailyQuota, QUOTA_LIMIT)}
+    </div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--txt3);margin-bottom:6px">本日</div>
+    <div style="overflow-x:auto;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse">${thead}${rows}</table>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--txt3);margin-bottom:6px">累計</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">${thead}${trows}</table>
+      <div style="font-size:11px;color:var(--txt3);margin-top:6px">累計クォータ: ${totalQuota.toLocaleString()}</div>
+    </div>
+    ${histHtml}
+  `;
+}
+
+function openSettings() {
+  document.getElementById('s-apikey').value = '';
+  document.getElementById('s-twitch-id').value = '';
+  document.getElementById('s-twitch-secret').value = '';
+  if (IS_FILE) {
+    document.getElementById('serverAddrRow').style.display = 'block';
+    buildServerSelect('s-server-select', 's-server-custom', BASE);
+  }
+  renderTagManageList();
+  api('GET', '/api/config').then(c => {
+    if (!c) return;
+    document.getElementById('s-interval').value    = c.refresh_interval || 600;
+    document.getElementById('s-days-past').value   = c.days_past   ?? 2;
+    document.getElementById('s-days-future').value = c.days_future ?? 2;
+    if (c.twitch_client_id) document.getElementById('s-twitch-id').value = c.twitch_client_id;
+    if (Array.isArray(c.member_keywords)) _memberKeywords = c.member_keywords;
+    renderMemberKeywordList();
+    if (Array.isArray(c.shorts_keywords)) _shortsKeywords = c.shorts_keywords;
+    renderShortsKeywordList();
+    const oh = c.operating_hours || {};
+    _opHoursEnabled = !!oh.enabled;
+    document.getElementById('opHoursToggle').className = 'toggle' + (_opHoursEnabled ? ' on' : '');
+    document.getElementById('opHoursConfig').style.display = _opHoursEnabled ? 'block' : 'none';
+    if (oh.start) document.getElementById('s-oh-start').value = oh.start;
+    if (oh.end)   document.getElementById('s-oh-end').value   = oh.end;
+  }).catch(()=>{});
+  api('GET', '/api/status').then(s => {
+    if (!s) return;
+    document.getElementById('s-interval').value = s.refreshInterval;
+    const v = s.version || '?', b = s.branch || '?', c = s.commit || '';
+    document.getElementById('s-build-info').textContent =
+      `v${v}  ${b}${c ? '  ' + c : ''}`;
+  }).catch(()=>{});
+  document.getElementById('autoRefreshToggle').className = 'toggle' + (_autoRefreshOnLoad ? ' on' : '');
+  showMsg('settingsMsg','','');
+  openModal('settingsModal');
+}
+
+async function saveSettings() {
+  const d = {};
+  const key = document.getElementById('s-apikey').value.trim();
+  if (key) d.youtube_api_key = key;
+  const tid = document.getElementById('s-twitch-id').value.trim();
+  if (tid) d.twitch_client_id = tid;
+  const tsec = document.getElementById('s-twitch-secret').value.trim();
+  if (tsec) d.twitch_client_secret = tsec;
+  d.member_keywords = _memberKeywords;
+  d.shorts_keywords = _shortsKeywords;
+  localStorage.setItem('haisin_auto_refresh_on_load', _autoRefreshOnLoad);
+  const iv = document.getElementById('s-interval').value;
+  if (iv) d.refresh_interval = parseInt(iv);
+  const dp = document.getElementById('s-days-past').value;
+  if (dp) d.days_past = parseInt(dp);
+  const df = document.getElementById('s-days-future').value;
+  if (df) d.days_future = parseInt(df);
+  d.operating_hours = {
+    enabled: _opHoursEnabled,
+    start: document.getElementById('s-oh-start').value || '08:00',
+    end:   document.getElementById('s-oh-end').value   || '23:00',
+  };
+  if (IS_FILE) {
+    const sv = getServerComboValue('s-server-select', 's-server-custom');
+    if (sv && sv !== BASE) { BASE = sv; addToServerList(sv); }
+  }
+  try {
+    await api('POST', '/api/config', d);
+    showMsg('settingsMsg','保存しました','info');
+    setTimeout(() => closeModal('settingsModal'), 900);
+    await Promise.all([checkStatus(), loadStreams()]);
+  } catch(e) { showMsg('settingsMsg', e.message, 'error'); }
+}
+
+/* ═══════════════════════════════════════════════════
+   Manual refresh
+═══════════════════════════════════════════════════ */
+async function manualRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spin');
+  try {
+    await api('POST', '/api/refresh');
+    await new Promise(r => setTimeout(r, 2200));
+    await Promise.all([checkStatus(), loadStreams()]);
+  } catch {}
+  btn.classList.remove('spin');
+}
+
+/* ═══════════════════════════════════════════════════
+   Color presets
+═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   Wizard
+═══════════════════════════════════════════════════ */
+function wizardHTML() {
+  return `<div id="wizard">
+    <div class="wizard-icon">📡</div>
+    <div class="wizard-title">Livelist</div>
+    <div class="wizard-desc">チャンネルを登録すると YouTube の配信・動画を自動取得して表示します。</div>
+    ${!_hasApiKey?`<div class="wizard-step">
+      <div class="step-title"><span class="step-num">1</span>YouTube API Key を設定（推奨）</div>
+      <div class="step-desc">LIVE・配信予定の正確な検出に必要です。Data API v3 → 一般公開データ でキーを取得。</div>
+      <button class="wizard-btn" onclick="openSettings()" style="margin-top:8px">⚙ 設定を開く</button>
+    </div>`:''}
+    <div class="wizard-step">
+      <div class="step-title"><span class="step-num">${_hasApiKey?'1':'2'}</span>チャンネルを追加</div>
+      <div class="step-desc">左の ＋ ボタン、または下のボタンからチャンネル URL を登録してください。</div>
+      <button class="wizard-btn" onclick="openAddChannel()" style="margin-top:8px">＋ チャンネルを追加</button>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   Modal / UI helpers
+═══════════════════════════════════════════════════ */
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.innerHTML = text; el.className = 'modal-msg' + (type?' '+type:'');
+  el.style.display = text ? 'block' : 'none';
+}
+function setBtn(id, html, disabled) {
+  const el = document.getElementById(id); el.innerHTML = html; el.disabled = disabled;
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open'));
+});
+
+/* ═══════════════════════════════════════════════════
+   Time helpers
+═══════════════════════════════════════════════════ */
+function fmtDuration(dur) {
+  if (!dur) return '';
+  const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return '';
+  const h=+(m[1]||0), mn=+(m[2]||0), s=+(m[3]||0);
+  if (!h&&!mn&&!s) return '';
+  return h ? `${h}:${String(mn).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${mn}:${String(s).padStart(2,'0')}`;
+}
+function fmtCardTime(s) {
+  const ref = s.scheduledAt || s.actualStart || s.publishedAt;
+  if (!ref) return {text:'時刻不明', soon:false};
+  const d = new Date(ref), now = Date.now(), diff = d - now;
+  if (s.type === 'live') return {text:'配信中', soon:false};
+  if (s.type === 'upcoming' || s.type === 'premiere') {
+    if (diff < 0)         return {text:'間もなく開始', soon:true};
+    if (diff < 3600000)   return {text:`${Math.ceil(diff/60000)} 分後`, soon:true};
+    return {text:fmtDt(d), soon:false};
+  }
+  const abs = Math.abs(diff);
+  if (abs < 60000)     return {text:'たった今', soon:false};
+  if (abs < 3600000)   return {text:`${Math.floor(abs/60000)} 分前`, soon:false};
+  if (abs < 86400000)  return {text:`${Math.floor(abs/3600000)} 時間前`, soon:false};
+  if (abs < 604800000) return {text:`${Math.floor(abs/86400000)} 日前`, soon:false};
+  return {text:fmtDt(d), soon:false};
+}
+function fmtDt(d) {
+  const now=new Date(), tod=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const tom=new Date(tod); tom.setDate(tod.getDate()+1);
+  const base=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const t=d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  if (+base===+tod) return `今日 ${t}`;
+  if (+base===+tom) return `明日 ${t}`;
+  return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric',weekday:'short'})+' '+t;
+}
+function fmtRel(d) {
+  const diff = Date.now() - d;
+  if (diff<60000)   return 'たった今';
+  if (diff<3600000) return `${Math.floor(diff/60000)} 分前`;
+  return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════
+   Auto-refresh
+═══════════════════════════════════════════════════ */
+setInterval(async () => { await Promise.all([checkStatus(), loadStreams()]); }, 60000);
+
+/* ═══════════════════════════════════════════════════
+   Init
+═══════════════════════════════════════════════════ */
+async function init() {
+  loadTypeFilters();
+  const ok = initBase();
+  if (!ok) return;
+  if (IS_FILE) document.getElementById('serverAddrRow').style.display = 'block';
+  await checkStatus();
+  await Promise.all([loadTags(), loadChannels()]);
+  await loadStreams();
+  if (_autoRefreshOnLoad) api('POST', '/api/refresh').catch(()=>{});
+}
+init();
+</script>
+</body>
+</html>
