@@ -925,7 +925,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
 
     def _path(self):
-        return urllib.parse.unquote(self.path.split('?')[0].rstrip('/'))
+        return urllib.parse.unquote(self.path.split('?')[0]).rstrip('/')
 
     def do_OPTIONS(self):
         self.send_response(200)
