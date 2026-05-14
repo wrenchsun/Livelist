@@ -540,8 +540,8 @@ body.header-hidden .header-restore{display:block}
 
     <div class="fgroup">
       <label>チャンネル検索 1日あたりの上限回数</label>
-      <input id="s-search-max" type="number" min="1" max="90" value="90">
-      <div class="hint">YouTube検索は1回100 quota消費（上限90回 = 9,000 quota/日）</div>
+      <input id="s-search-max" type="number" min="1" max="90" value="10">
+      <div class="hint">YouTube検索は1回100 quota消費（デフォルト10回、最大90回 = 9,000 quota/日）</div>
     </div>
 
     <div class="fgroup">
@@ -1645,8 +1645,8 @@ function searchChItemHTML(c) {
 
 function openAddChannelPrefill(url) {
   closeModal('searchModal');
-  document.getElementById('addUrl').value = url;
   openAddChannel();
+  document.getElementById('f-url').value = url;
 }
 
 function openSettings() {

@@ -55,7 +55,7 @@ DEFAULT_CONFIG = {
     "member_keywords": DEFAULT_MEMBER_KEYWORDS,
     "shorts_keywords": DEFAULT_SHORTS_KEYWORDS,
     "operating_hours": {"enabled": False, "start": "08:00", "end": "23:00"},
-    "search_max_daily": 90,
+    "search_max_daily": 10,
 }
 
 STAT_KINDS = ('rss', 'oembed', 'videos_list', 'resolve',
