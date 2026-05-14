@@ -28,7 +28,7 @@ body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
 
 /* ── Status bar ── */
 #statusBar{
-  flex-shrink:0;background:rgba(9,9,15,.95);backdrop-filter:blur(10px);
+  flex-shrink:0;background:var(--bg);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--b1);padding:0 16px;height:44px;
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:100;
@@ -54,7 +54,7 @@ body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
 .server-combo{display:flex;gap:6px;flex:1;min-width:260px;max-width:480px;align-items:center;flex-wrap:wrap}
 .server-combo select,.server-combo input{
   padding:5px 10px;border-radius:6px;border:1px solid rgba(74,158,255,.4);
-  background:rgba(9,9,15,.9);color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;}
+  background:var(--bg);color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;}
 .server-combo select:focus,.server-combo input:focus{border-color:var(--accent)}
 .server-combo select{flex:1;min-width:180px;cursor:pointer}
 .server-combo input{flex:1;min-width:180px}
