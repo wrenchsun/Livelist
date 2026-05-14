@@ -1772,7 +1772,7 @@ function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function showMsg(id, text, type) {
   const el = document.getElementById(id);
-  el.innerHTML = text; el.className = 'modal-msg' + (type?' '+type:'');
+  el.textContent = text; el.className = 'modal-msg' + (type?' '+type:'');
   el.style.display = text ? 'block' : 'none';
 }
 function setBtn(id, html, disabled) {

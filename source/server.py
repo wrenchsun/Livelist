@@ -871,16 +871,29 @@ MIME = {
     '.html': 'text/html; charset=utf-8',
     '.js':   'application/javascript; charset=utf-8',
     '.css':  'text/css; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
     '.ico':  'image/x-icon',
     '.png':  'image/png',
     '.jpg':  'image/jpeg',
     '.svg':  'image/svg+xml',
+    '.webp': 'image/webp',
+    '.gif':  'image/gif',
 }
+
+# 静的配信を許可する拡張子（.json/.py/.bat 等は除外）
+_STATIC_ALLOWED_EXT = frozenset(MIME.keys())
 
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self.headers.get('Origin', '')
+        # localhost / 127.0.0.1 / file:// (null) のみ許可
+        if origin.startswith('http://localhost') or \
+           origin.startswith('http://127.0.0.1') or \
+           origin == 'null':
+            allow = origin
+        else:
+            allow = 'null'
+        self.send_header('Access-Control-Allow-Origin', allow)
+        self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
@@ -895,7 +908,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get('Content-Length', 0))
-        return json.loads(self.rfile.read(n)) if n else {}
+        if not n:
+            return {}
+        try:
+            return json.loads(self.rfile.read(min(n, 1_048_576)))
+        except (json.JSONDecodeError, ValueError):
+            self._json(400, {'error': 'invalid json'})
+            return None
 
     def _path(self):
         return self.path.split('?')[0].rstrip('/')
@@ -1005,9 +1024,18 @@ class Handler(BaseHTTPRequestHandler):
 
         else:
             rel = 'index.html' if p in ('', '/') else p.lstrip('/')
+            ext = os.path.splitext(rel)[1].lower()
+            if ext not in _STATIC_ALLOWED_EXT:
+                self.send_response(403); self.end_headers(); return
             fp = os.path.join(STATIC, rel.replace('/', os.sep))
+            # パストラバーサル防止
+            try:
+                safe = os.path.commonpath([os.path.abspath(fp), os.path.abspath(STATIC)])
+                if safe != os.path.abspath(STATIC):
+                    self.send_response(403); self.end_headers(); return
+            except ValueError:
+                self.send_response(403); self.end_headers(); return
             if os.path.isfile(fp):
-                ext = os.path.splitext(fp)[1].lower()
                 with open(fp, 'rb') as f:
                     body = f.read()
                 self.send_response(200)
@@ -1024,6 +1052,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == '/api/channels':
             d = self._body()
+            if d is None: return
             url   = d.get('url', '').strip()
             if not url:
                 self._json(400, {'error': 'URLが必要です'}); return
@@ -1059,6 +1088,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif p == '/api/tags':
             d = self._body()
+            if d is None: return
             name = d.get('name', '').strip()
             if not name:
                 self._json(400, {'error': '名前が必要です'}); return
@@ -1070,6 +1100,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif p == '/api/tags/reorder':
             d = self._body()
+            if d is None: return
             order = d.get('order', [])
             existing = load_json(F_TAGS, [])
             new_tags = [t for t in order if t in existing]
@@ -1081,6 +1112,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif p == '/api/channels/reorder':
             d = self._body()
+            if d is None: return
             ids = d.get('ids', [])
             chs = load_json(F_CHANNELS, [])
             id_map = {c['id']: c for c in chs}
@@ -1098,6 +1130,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif p == '/api/config':
             d = self._body()
+            if d is None: return
             c = cfg()
             if 'youtube_api_key' in d:
                 c['youtube_api_key'] = d['youtube_api_key']
@@ -1149,6 +1182,7 @@ class Handler(BaseHTTPRequestHandler):
         if p.startswith('/api/channels/'):
             cid = p.rsplit('/', 1)[-1]
             d   = self._body()
+            if d is None: return
             chs = load_json(F_CHANNELS, [])
             for i, c in enumerate(chs):
                 if c['id'] == cid:
