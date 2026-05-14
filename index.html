@@ -28,7 +28,7 @@ body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
 
 /* ── Status bar ── */
 #statusBar{
-  flex-shrink:0;background:rgba(9,9,15,.95);backdrop-filter:blur(10px);
+  flex-shrink:0;background:var(--bg);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--b1);padding:0 16px;height:44px;
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:100;
@@ -54,7 +54,7 @@ body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
 .server-combo{display:flex;gap:6px;flex:1;min-width:260px;max-width:480px;align-items:center;flex-wrap:wrap}
 .server-combo select,.server-combo input{
   padding:5px 10px;border-radius:6px;border:1px solid rgba(74,158,255,.4);
-  background:rgba(9,9,15,.9);color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;}
+  background:var(--bg);color:var(--txt);font-size:12px;outline:none;transition:border-color .15s;}
 .server-combo select:focus,.server-combo input:focus{border-color:var(--accent)}
 .server-combo select{flex:1;min-width:180px;cursor:pointer}
 .server-combo input{flex:1;min-width:180px}
@@ -299,6 +299,37 @@ a.card-ch:hover .card-ch-name{color:var(--txt);text-decoration:underline}
 .ch-faded{opacity:.38}
 .ch-group-sep{font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--txt3);text-transform:uppercase;padding:8px 8px 3px;margin-top:4px;border-top:1px solid var(--b1)}
 
+/* ── Channel search ── */
+.ch-search-wrap{display:flex;align-items:center;gap:5px;margin-right:4px}
+.ch-search-input{padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:var(--surf2);
+  color:var(--txt);font-size:12px;outline:none;width:160px;transition:border-color .15s,width .2s;font-family:inherit}
+.ch-search-input:focus{border-color:var(--accent);width:200px}
+.ch-search-input::placeholder{color:var(--txt3)}
+.search-remaining{font-size:11px;color:var(--txt3);white-space:nowrap;flex-shrink:0}
+/* Search results modal */
+#searchModal .modal{max-width:680px;width:92vw;max-height:80vh;display:flex;flex-direction:column}
+.search-results{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+.search-results::-webkit-scrollbar{width:4px}
+.search-results::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.search-platform-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--txt3);margin:8px 0 4px}
+.search-platform-label:first-child{margin-top:0}
+.search-ch-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+  background:var(--surf2);border:1px solid var(--b1);transition:border-color .15s}
+.search-ch-item.registered{opacity:.5}
+.search-ch-item:hover{border-color:var(--b2)}
+.search-ch-thumb{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--b2)}
+.search-ch-init{width:36px;height:36px;border-radius:50%;background:var(--surf);border:1px solid var(--b2);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--txt2);flex-shrink:0}
+.search-ch-info{flex:1;min-width:0}
+.search-ch-name{font-size:13px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-ch-meta{font-size:11px;color:var(--txt3);margin-top:1px}
+.search-ch-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.search-reg-badge{font-size:10px;color:var(--txt3);border:1px solid var(--b2);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.search-add-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--b2);background:transparent;
+  color:var(--txt2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.search-add-btn:hover{border-color:var(--accent);color:var(--accent)}
+.search-empty{text-align:center;padding:30px 0;color:var(--txt3);font-size:13px}
+.search-error{font-size:12px;color:var(--live);padding:6px 10px;background:rgba(255,58,58,.08);border-radius:6px;border:1px solid rgba(255,58,58,.2)}
 /* ── Theme / Customization ── */
 .theme-btn{padding:4px 14px;border-radius:6px;border:1px solid var(--b2);background:var(--surf2);color:var(--txt2);cursor:pointer;font-size:12px;transition:all .15s}
 .theme-btn:hover,.theme-btn.active{border-color:var(--accent);color:var(--accent)}
@@ -345,6 +376,11 @@ body.header-hidden .header-restore{display:block}
     <span id="ohBadge" style="display:none;font-size:11px;color:var(--txt3);margin-left:6px;padding:2px 6px;border-radius:4px;border:1px solid var(--b2)">⏸ 稼働時間外</span>
   </div>
   <div class="status-right">
+    <div class="ch-search-wrap">
+      <input id="chSearchInput" class="ch-search-input" type="search" placeholder="🔍 チャンネル検索"
+             onkeydown="if(event.key==='Enter')searchChannels()">
+      <span id="searchRemaining" class="search-remaining"></span>
+    </div>
     <span class="last-update" id="lastUpdate"></span>
     <button class="sbar-btn" id="refreshBtn" onclick="manualRefresh()" title="今すぐ更新">↻</button>
     <button class="sbar-btn" onclick="openStats()" title="API統計">📊</button>
@@ -431,6 +467,16 @@ body.header-hidden .header-restore{display:block}
 </div>
 
 <!-- ══ Stats modal ══ -->
+<div class="overlay" id="searchModal" onclick="if(event.target===this)closeModal('searchModal')">
+  <div class="modal">
+    <div class="modal-title">🔍 チャンネル検索</div>
+    <div id="searchResults" class="search-results"></div>
+    <div class="modal-foot" style="margin-top:12px">
+      <button class="btn-cancel" onclick="closeModal('searchModal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="statsModal" onclick="if(event.target===this)closeModal('statsModal')">
   <div class="modal wide" style="max-width:600px">
     <div class="modal-title">📊 API 使用統計</div>
@@ -490,6 +536,12 @@ body.header-hidden .header-restore{display:block}
     <div class="fgroup">
       <label>更新間隔（秒）</label>
       <input id="s-interval" type="number" min="60" max="3600" value="600">
+    </div>
+
+    <div class="fgroup">
+      <label>チャンネル検索 1日あたりの上限回数</label>
+      <input id="s-search-max" type="number" min="1" max="90" value="10">
+      <div class="hint">YouTube検索は1回100 quota消費（デフォルト10回、最大90回 = 9,000 quota/日）</div>
     </div>
 
     <div class="fgroup">
@@ -823,6 +875,9 @@ async function checkStatus() {
       document.getElementById('lastUpdate').textContent = '更新: ' + fmtRel(new Date(s.lastUpdated));
     const ohEnabled = s.operatingHours?.enabled;
     document.getElementById('ohBadge').style.display = (ohEnabled && !s.inOperatingHours) ? 'inline-block' : 'none';
+    const rem = s.searchRemaining ?? '';
+    const max = s.searchMaxDaily ?? 90;
+    document.getElementById('searchRemaining').textContent = rem !== '' ? `残${rem}/${max}回` : '';
     return s;
   } catch {
     document.getElementById('statusDot').className  = 'status-dot error';
@@ -1525,6 +1580,75 @@ function renderStats(s) {
   `;
 }
 
+/* ═══════════════════════════════════════════════════
+   Channel search
+═══════════════════════════════════════════════════ */
+async function searchChannels() {
+  const q = document.getElementById('chSearchInput').value.trim();
+  if (!q) return;
+  const el = document.getElementById('searchResults');
+  el.innerHTML = '<div class="search-empty">検索中...</div>';
+  openModal('searchModal');
+  try {
+    const r = await api('GET', `/api/search/channels?q=${encodeURIComponent(q)}`);
+    const rem = r.remaining ?? '';
+    const max = document.getElementById('searchRemaining').textContent.split('/')[1]?.replace('回','') ?? '90';
+    if (rem !== '') document.getElementById('searchRemaining').textContent = `残${rem}/${max}回`;
+    el.innerHTML = renderSearchResults(r);
+  } catch(e) {
+    el.innerHTML = `<div class="search-error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderSearchResults(r) {
+  let html = '';
+  const sections = [
+    { key: 'youtube', label: 'YouTube' },
+    { key: 'twitch',  label: 'Twitch' },
+  ];
+  let any = false;
+  for (const { key, label } of sections) {
+    const items = r[key];
+    const err   = r[key + 'Error'];
+    if (err) {
+      html += `<div class="search-platform-label">${label}</div><div class="search-error">${esc(err)}</div>`;
+      any = true; continue;
+    }
+    if (!items?.length) continue;
+    any = true;
+    const unregistered = items.filter(c => !c.registered);
+    const registered   = items.filter(c => c.registered);
+    html += `<div class="search-platform-label">${label}</div>`;
+    for (const c of [...unregistered, ...registered]) html += searchChItemHTML(c);
+  }
+  return any ? html : '<div class="search-empty">結果が見つかりませんでした</div>';
+}
+
+function searchChItemHTML(c) {
+  const init = (c.name || '?')[0].toUpperCase();
+  const img  = c.thumbnail
+    ? `<img class="search-ch-thumb" src="${esc(c.thumbnail)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><div class="search-ch-init" style="display:none">${esc(init)}</div>`
+    : `<div class="search-ch-init">${esc(init)}</div>`;
+  const live = c.isLive ? '<span style="font-size:10px;color:var(--live);font-weight:700">● LIVE</span> ' : '';
+  const reg  = c.registered
+    ? `<span class="search-reg-badge">登録済み</span>`
+    : `<button class="search-add-btn" onclick="openAddChannelPrefill('${esc(c.url)}')" title="チャンネルを追加">＋</button>`;
+  return `<div class="search-ch-item${c.registered?' registered':''}">
+    <a href="${esc(c.url)}" target="_blank" rel="noopener" style="display:contents">${img}</a>
+    <div class="search-ch-info">
+      <a class="search-ch-name" href="${esc(c.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">${esc(c.name)}</a>
+      <div class="search-ch-meta">${live}${esc(c.url)}</div>
+    </div>
+    <div class="search-ch-actions">${reg}</div>
+  </div>`;
+}
+
+function openAddChannelPrefill(url) {
+  closeModal('searchModal');
+  openAddChannel();
+  document.getElementById('f-url').value = url;
+}
+
 function openSettings() {
   document.getElementById('s-apikey').value = '';
   document.getElementById('s-twitch-id').value = '';
@@ -1537,6 +1661,7 @@ function openSettings() {
   api('GET', '/api/config').then(c => {
     if (!c) return;
     document.getElementById('s-interval').value    = c.refresh_interval || 600;
+    document.getElementById('s-search-max').value  = c.search_max_daily ?? 90;
     document.getElementById('s-days-past').value   = c.days_past   ?? 2;
     document.getElementById('s-days-future').value = c.days_future ?? 2;
     if (c.twitch_client_id) document.getElementById('s-twitch-id').value = c.twitch_client_id;
@@ -1578,6 +1703,8 @@ async function saveSettings() {
   localStorage.setItem('haisin_auto_refresh_on_load', _autoRefreshOnLoad);
   const iv = document.getElementById('s-interval').value;
   if (iv) d.refresh_interval = parseInt(iv);
+  const sm = document.getElementById('s-search-max').value;
+  if (sm) d.search_max_daily = Math.max(1, Math.min(90, parseInt(sm)));
   const dp = document.getElementById('s-days-past').value;
   if (dp) d.days_past = parseInt(dp);
   const df = document.getElementById('s-days-future').value;

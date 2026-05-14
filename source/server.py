@@ -55,10 +55,12 @@ DEFAULT_CONFIG = {
     "member_keywords": DEFAULT_MEMBER_KEYWORDS,
     "shorts_keywords": DEFAULT_SHORTS_KEYWORDS,
     "operating_hours": {"enabled": False, "start": "08:00", "end": "23:00"},
+    "search_max_daily": 10,
 }
 
 STAT_KINDS = ('rss', 'oembed', 'videos_list', 'resolve',
-              'twitch_resolve', 'twitch_streams', 'twitch_schedule', 'twitch_videos')
+              'twitch_resolve', 'twitch_streams', 'twitch_schedule', 'twitch_videos',
+              'ch_search')
 
 # ── 型定義 ────────────────────────────────────────────────────────────────────
 
@@ -203,6 +205,69 @@ def yt_api(endpoint, params, key):
         record_api(kind, False, quota)
         raise
 
+# ── Channel search ────────────────────────────────────────────────────────────
+
+_search_counter = {'date': '', 'count': 0}
+_search_lock    = threading.Lock()
+
+def _search_remaining():
+    max_daily = cfg().get('search_max_daily', 90)
+    with _search_lock:
+        today = datetime.now().strftime('%Y-%m-%d')
+        if _search_counter['date'] != today:
+            _search_counter['date']  = today
+            _search_counter['count'] = 0
+        return max(0, max_daily - _search_counter['count'])
+
+def _consume_search():
+    with _search_lock:
+        today = datetime.now().strftime('%Y-%m-%d')
+        if _search_counter['date'] != today:
+            _search_counter['date']  = today
+            _search_counter['count'] = 0
+        _search_counter['count'] += 1
+
+def yt_search_channels(q, api_key, max_results=8):
+    params = {'part': 'snippet', 'q': q, 'type': 'channel', 'maxResults': max_results, 'key': api_key}
+    url = 'https://www.googleapis.com/youtube/v3/search?' + urllib.parse.urlencode(params)
+    try:
+        result = json.loads(fetch(url))
+        record_api('ch_search', True, 100)
+    except Exception:
+        record_api('ch_search', False, 100)
+        raise
+    out = []
+    for item in result.get('items', []):
+        sn  = item.get('snippet', {})
+        cid = sn.get('channelId') or item.get('id', {}).get('channelId', '')
+        if not cid:
+            continue
+        thumb = (sn.get('thumbnails') or {})
+        thumb_url = (thumb.get('medium') or thumb.get('default') or {}).get('url')
+        out.append({
+            'id':        cid,
+            'name':      sn.get('channelTitle', ''),
+            'thumbnail': thumb_url,
+            'url':       f'https://www.youtube.com/channel/{cid}',
+            'platform':  'youtube',
+        })
+    return out
+
+def twitch_search_channels(q, client_id, client_secret, max_results=8):
+    token = get_twitch_token(client_id, client_secret)
+    data  = twitch_api('search/channels', {'query': q, 'first': max_results}, client_id, token)
+    out   = []
+    for ch in data.get('data', []):
+        out.append({
+            'id':        ch['id'],
+            'name':      ch.get('display_name', ch.get('broadcaster_login', '')),
+            'thumbnail': ch.get('thumbnail_url') or None,
+            'url':       f"https://www.twitch.tv/{ch.get('broadcaster_login', '')}",
+            'platform':  'twitch',
+            'isLive':    ch.get('is_live', False),
+        })
+    return out
+
 # ── Twitch API ────────────────────────────────────────────────────────────────
 
 _twitch_token = {'token': None, 'expires_at': 0}
@@ -339,7 +404,15 @@ def _enrich_from_rss(cid, url):
         name = root.findtext('a:title', namespaces=ns) or 'Unknown'
     except Exception:
         name = 'Unknown'
-    return {'id': cid, 'name': name, 'thumbnail': None}
+    thumb = None
+    try:
+        html, _ = fetch_with_final_url(url)
+        m = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if m:
+            thumb = m.group(1)
+    except Exception:
+        pass
+    return {'id': cid, 'name': name, 'thumbnail': thumb}
 
 # ── Stream fetching ───────────────────────────────────────────────────────────
 
@@ -855,6 +928,8 @@ class Handler(BaseHTTPRequestHandler):
                 'version': __version__,
                 'branch':  __branch__,
                 'commit':  __commit__,
+                'searchRemaining': _search_remaining(),
+                'searchMaxDaily':  c.get('search_max_daily', 90),
             })
 
         elif p == '/api/tags':
@@ -878,6 +953,42 @@ class Handler(BaseHTTPRequestHandler):
         elif p == '/api/stats':
             with _stats_lock:
                 self._json(200, _load_stats())
+
+        elif p == '/api/search/channels':
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            q  = qs.get('q', [''])[0].strip()
+            if not q:
+                self._json(400, {'error': 'q parameter required'}); return
+            c          = cfg()
+            api_key    = c.get('youtube_api_key', '')
+            client_id  = c.get('twitch_client_id', '')
+            client_sec = c.get('twitch_client_secret', '')
+            if not api_key and not (client_id and client_sec):
+                self._json(400, {'error': '検索にはYouTube APIキーまたはTwitch認証情報が必要です'}); return
+            registered_ids = {ch['id'] for ch in load_json(F_CHANNELS, [])}
+            result = {'youtube': [], 'twitch': []}
+            if api_key:
+                remaining = _search_remaining()
+                if remaining <= 0:
+                    self._json(429, {'error': '本日の検索上限に達しました', 'remaining': 0}); return
+                _consume_search()
+                try:
+                    items = yt_search_channels(q, api_key)
+                    for r in items:
+                        r['registered'] = r['id'] in registered_ids
+                    result['youtube'] = items
+                except Exception as e:
+                    result['youtubeError'] = str(e)
+            if client_id and client_sec:
+                try:
+                    items = twitch_search_channels(q, client_id, client_sec)
+                    for r in items:
+                        r['registered'] = r['id'] in registered_ids
+                    result['twitch'] = items
+                except Exception as e:
+                    result['twitchError'] = str(e)
+            result['remaining'] = _search_remaining()
+            self._json(200, result)
 
         elif p.startswith('/api/debug/resolve'):
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -1009,6 +1120,8 @@ class Handler(BaseHTTPRequestHandler):
             if 'shorts_keywords' in d:
                 kws = [str(k).strip() for k in d['shorts_keywords'] if str(k).strip()]
                 c['shorts_keywords'] = kws
+            if 'search_max_daily' in d:
+                c['search_max_daily'] = max(1, min(90, int(d['search_max_daily'])))
             if 'operating_hours' in d:
                 oh = d['operating_hours']
                 enabled = bool(oh.get('enabled', False))
