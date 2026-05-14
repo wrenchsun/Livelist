@@ -42,10 +42,10 @@ set BRANCH=unknown
 set COMMIT=local
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%b
 for /f "delims=" %%c in ('git rev-parse --short HEAD 2^>nul') do set COMMIT=%%c
-echo ビルド情報: v1.0.0 / %BRANCH% / %COMMIT%
+echo ビルド情報: v1.1.0 / %BRANCH% / %COMMIT%
 
 :: _build_info.py を生成（ビルド情報を exe に埋め込む）
-%PY% -c "f=open('_build_info.py','w',encoding='utf-8'); f.write(\"__version__ = '1.0.0'\n__branch__  = '%BRANCH%'\n__commit__  = '%COMMIT%'\n\")"
+%PY% -c "f=open('_build_info.py','w',encoding='utf-8'); f.write(\"__version__ = '1.1.0'\n__branch__  = '%BRANCH%'\n__commit__  = '%COMMIT%'\n\")"
 
 :: source/ から実行し、exeをルート（..）に直接出力
 for /f "delims=" %%v in ('%PY% --version 2^>^&1') do echo 使用 Python: %%v
