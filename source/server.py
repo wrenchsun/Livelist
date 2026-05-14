@@ -959,17 +959,19 @@ class Handler(BaseHTTPRequestHandler):
             q  = qs.get('q', [''])[0].strip()
             if not q:
                 self._json(400, {'error': 'q parameter required'}); return
-            remaining = _search_remaining()
-            if remaining <= 0:
-                self._json(429, {'error': '本日の検索上限に達しました', 'remaining': 0}); return
-            _consume_search()
             c          = cfg()
             api_key    = c.get('youtube_api_key', '')
             client_id  = c.get('twitch_client_id', '')
             client_sec = c.get('twitch_client_secret', '')
+            if not api_key and not (client_id and client_sec):
+                self._json(400, {'error': '検索にはYouTube APIキーまたはTwitch認証情報が必要です'}); return
             registered_ids = {ch['id'] for ch in load_json(F_CHANNELS, [])}
-            result = {'youtube': [], 'twitch': [], 'remaining': _search_remaining()}
+            result = {'youtube': [], 'twitch': []}
             if api_key:
+                remaining = _search_remaining()
+                if remaining <= 0:
+                    self._json(429, {'error': '本日の検索上限に達しました', 'remaining': 0}); return
+                _consume_search()
                 try:
                     items = yt_search_channels(q, api_key)
                     for r in items:
@@ -985,6 +987,7 @@ class Handler(BaseHTTPRequestHandler):
                     result['twitch'] = items
                 except Exception as e:
                     result['twitchError'] = str(e)
+            result['remaining'] = _search_remaining()
             self._json(200, result)
 
         elif p.startswith('/api/debug/resolve'):
