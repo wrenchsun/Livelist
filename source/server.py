@@ -404,7 +404,15 @@ def _enrich_from_rss(cid, url):
         name = root.findtext('a:title', namespaces=ns) or 'Unknown'
     except Exception:
         name = 'Unknown'
-    return {'id': cid, 'name': name, 'thumbnail': None}
+    thumb = None
+    try:
+        html, _ = fetch_with_final_url(url)
+        m = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if m:
+            thumb = m.group(1)
+    except Exception:
+        pass
+    return {'id': cid, 'name': name, 'thumbnail': thumb}
 
 # ── Stream fetching ───────────────────────────────────────────────────────────
 
