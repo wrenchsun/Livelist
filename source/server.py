@@ -885,14 +885,22 @@ _STATIC_ALLOWED_EXT = frozenset(MIME.keys())
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         origin = self.headers.get('Origin', '')
-        # localhost / 127.0.0.1 / file:// (null) のみ許可
-        if origin.startswith('http://localhost') or \
-           origin.startswith('http://127.0.0.1') or \
-           origin == 'null':
-            allow = origin
-        else:
+        if origin == 'null':
+            # file:// アクセス
             allow = 'null'
-        self.send_header('Access-Control-Allow-Origin', allow)
+        elif origin:
+            try:
+                parsed = urllib.parse.urlparse(origin)
+                if parsed.scheme == 'http' and parsed.hostname in ('localhost', '127.0.0.1'):
+                    allow = origin
+                else:
+                    allow = 'null'
+            except Exception:
+                allow = 'null'
+        else:
+            allow = ''
+        if allow:
+            self.send_header('Access-Control-Allow-Origin', allow)
         self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
