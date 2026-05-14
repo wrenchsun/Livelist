@@ -39,6 +39,7 @@ F_CHANNELS = os.path.join(ASSET, 'channels.json')
 F_CACHE    = os.path.join(ASSET, 'cache.json')
 F_TAGS     = os.path.join(ASSET, 'tags.json')
 F_STATS    = os.path.join(ASSET, 'api_stats.json')
+F_SEARCH   = os.path.join(ASSET, 'search_counter.json')
 PORT = 8080
 
 DEFAULT_MEMBER_KEYWORDS = ['メン限', 'メンバー限定', 'メンバーシップ限定', 'member only', 'members only', 'メンバー専用']
@@ -109,11 +110,20 @@ def load_json(path, default=None):
     except Exception:
         return default
 
+_config_lock   = threading.Lock()
+_channels_lock = threading.Lock()
+_tags_lock     = threading.Lock()
+
 def save_json(path, data):
-    tmp = path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    tmp = f'{path}.{uuid.uuid4().hex}.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try: os.unlink(tmp)
+        except OSError: pass
+        raise
 
 def cfg():
     return {**DEFAULT_CONFIG, **load_json(F_CONFIG, {})}
@@ -207,25 +217,22 @@ def yt_api(endpoint, params, key):
 
 # ── Channel search ────────────────────────────────────────────────────────────
 
-_search_counter = {'date': '', 'count': 0}
-_search_lock    = threading.Lock()
+_search_lock = threading.Lock()
 
 def _search_remaining():
     max_daily = cfg().get('search_max_daily', 90)
     with _search_lock:
+        d = load_json(F_SEARCH, {})
         today = datetime.now().strftime('%Y-%m-%d')
-        if _search_counter['date'] != today:
-            _search_counter['date']  = today
-            _search_counter['count'] = 0
-        return max(0, max_daily - _search_counter['count'])
+        count = d.get('count', 0) if d.get('date') == today else 0
+        return max(0, max_daily - count)
 
 def _consume_search():
     with _search_lock:
+        d = load_json(F_SEARCH, {})
         today = datetime.now().strftime('%Y-%m-%d')
-        if _search_counter['date'] != today:
-            _search_counter['date']  = today
-            _search_counter['count'] = 0
-        _search_counter['count'] += 1
+        count = d.get('count', 0) if d.get('date') == today else 0
+        save_json(F_SEARCH, {'date': today, 'count': count + 1})
 
 def yt_search_channels(q, api_key, max_results=8):
     params = {'part': 'snippet', 'q': q, 'type': 'channel', 'maxResults': max_results, 'key': api_key}
@@ -779,11 +786,22 @@ def _in_operating_hours(c: dict | None = None) -> bool:
 
 # ── Background refresh ────────────────────────────────────────────────────────
 
-_lock = threading.Lock()
-_refreshing = False
+_lock         = threading.Lock()
+_refresh_lock = threading.Lock()
+
+def _safe_refresh():
+    """フルリフレッシュ（重複実行スキップ）"""
+    if not _refresh_lock.acquire(blocking=False):
+        print(f'[{_ts()}] 更新スキップ（実行中）')
+        return
+    try:
+        refresh_all()
+    except Exception as e:
+        print(f'Refresh error: {e}')
+    finally:
+        _refresh_lock.release()
 
 def refresh_all(single_channel: ChannelDict | None = None) -> None:
-    global _refreshing
     channels = load_json(F_CHANNELS, [])
     if single_channel:
         targets = [single_channel]
@@ -850,20 +868,14 @@ def _ts():
     return datetime.now().strftime('%H:%M:%S')
 
 def _refresh_loop():
-    try:
-        refresh_all()
-    except Exception as e:
-        print(f'Initial refresh error: {e}')
+    _safe_refresh()
     while True:
         interval = cfg().get('refresh_interval', 300)
         time.sleep(interval)
         if not _in_operating_hours():
             print(f'[{_ts()}] 稼働時間外: 自動更新をスキップ')
             continue
-        try:
-            refresh_all()
-        except Exception as e:
-            print(f'Refresh loop error: {e}')
+        _safe_refresh()
 
 # ── HTTP Handler ──────────────────────────────────────────────────────────────
 
@@ -1069,28 +1081,29 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._json(400, {'error': str(e)}); return
 
-            chs = load_json(F_CHANNELS, [])
-            existing = next((c for c in chs if c['id'] == info['id']), None)
-            if existing:
-                if existing['name'] != info['name']:
-                    msg = f'「{info["name"]}」は既に「{existing["name"]}」として登録済みです（リブランド）。サイドバーの ✏ 編集で名前・URLを更新してください。'
-                else:
-                    msg = f'「{info["name"]}」は既に登録されています'
-                self._json(409, {'error': msg}); return
+            with _channels_lock:
+                chs = load_json(F_CHANNELS, [])
+                existing = next((c for c in chs if c['id'] == info['id']), None)
+                if existing:
+                    if existing['name'] != info['name']:
+                        msg = f'「{info["name"]}」は既に「{existing["name"]}」として登録済みです（リブランド）。サイドバーの ✏ 編集で名前・URLを更新してください。'
+                    else:
+                        msg = f'「{info["name"]}」は既に登録されています'
+                    self._json(409, {'error': msg}); return
 
-            ch = {
-                'id':           info['id'],
-                'name':         info['name'],
-                'url':          url,
-                'thumbnail':    info.get('thumbnail'),
-                'tags':         d.get('tags', []),
-                'platform':     info.get('platform', 'youtube'),
-                'registeredAt': now_utc().isoformat(),
-            }
-            if info.get('platform') == 'twitch':
-                ch['twitchLogin'] = info.get('twitchLogin', '')
-            chs.append(ch)
-            save_json(F_CHANNELS, chs)
+                ch = {
+                    'id':           info['id'],
+                    'name':         info['name'],
+                    'url':          url,
+                    'thumbnail':    info.get('thumbnail'),
+                    'tags':         d.get('tags', []),
+                    'platform':     info.get('platform', 'youtube'),
+                    'registeredAt': now_utc().isoformat(),
+                }
+                if info.get('platform') == 'twitch':
+                    ch['twitchLogin'] = info.get('twitchLogin', '')
+                chs.append(ch)
+                save_json(F_CHANNELS, chs)
             threading.Thread(target=refresh_all, args=(ch,), daemon=True).start()
             self._json(201, ch)
 
@@ -1100,86 +1113,93 @@ class Handler(BaseHTTPRequestHandler):
             name = d.get('name', '').strip()
             if not name:
                 self._json(400, {'error': '名前が必要です'}); return
-            tags = load_json(F_TAGS, [])
-            if name not in tags:
-                tags.append(name)
-                save_json(F_TAGS, tags)
+            with _tags_lock:
+                tags = load_json(F_TAGS, [])
+                if name not in tags:
+                    tags.append(name)
+                    save_json(F_TAGS, tags)
             self._json(200, tags)
 
         elif p == '/api/tags/reorder':
             d = self._body()
             if d is None: return
             order = d.get('order', [])
-            existing = load_json(F_TAGS, [])
-            new_tags = [t for t in order if t in existing]
-            for t in existing:
-                if t not in new_tags:
-                    new_tags.append(t)
-            save_json(F_TAGS, new_tags)
+            with _tags_lock:
+                existing = load_json(F_TAGS, [])
+                new_tags = [t for t in order if t in existing]
+                for t in existing:
+                    if t not in new_tags:
+                        new_tags.append(t)
+                save_json(F_TAGS, new_tags)
             self._json(200, new_tags)
 
         elif p == '/api/channels/reorder':
             d = self._body()
             if d is None: return
             ids = d.get('ids', [])
-            chs = load_json(F_CHANNELS, [])
-            id_map = {c['id']: c for c in chs}
-            new_order = [id_map[i] for i in ids if i in id_map]
-            in_ids = set(ids)
-            for c in chs:
-                if c['id'] not in in_ids:
-                    new_order.append(c)
-            save_json(F_CHANNELS, new_order)
+            with _channels_lock:
+                chs = load_json(F_CHANNELS, [])
+                id_map = {c['id']: c for c in chs}
+                new_order = [id_map[i] for i in ids if i in id_map]
+                in_ids = set(ids)
+                for c in chs:
+                    if c['id'] not in in_ids:
+                        new_order.append(c)
+                save_json(F_CHANNELS, new_order)
             self._json(200, new_order)
 
         elif p == '/api/refresh':
-            threading.Thread(target=refresh_all, daemon=True).start()
+            threading.Thread(target=_safe_refresh, daemon=True).start()
             self._json(200, {'ok': True, 'message': '更新を開始しました'})
 
         elif p == '/api/config':
             d = self._body()
             if d is None: return
-            c = cfg()
-            if 'youtube_api_key' in d:
-                c['youtube_api_key'] = d['youtube_api_key']
-            if 'twitch_client_id' in d:
-                c['twitch_client_id'] = d['twitch_client_id']
-            if 'twitch_client_secret' in d:
-                c['twitch_client_secret'] = d['twitch_client_secret']
+            reset_twitch = False
+            trigger_refresh = 'youtube_api_key' in d or 'twitch_client_secret' in d
+            with _config_lock:
+                c = cfg()
+                if 'youtube_api_key' in d:
+                    c['youtube_api_key'] = d['youtube_api_key']
+                if 'twitch_client_id' in d:
+                    c['twitch_client_id'] = d['twitch_client_id']
+                if 'twitch_client_secret' in d:
+                    c['twitch_client_secret'] = d['twitch_client_secret']
+                    reset_twitch = True
+                if 'refresh_interval' in d:
+                    c['refresh_interval'] = max(60, int(d['refresh_interval']))
+                if 'days_past' in d:
+                    c['days_past']   = max(1, min(14, int(d['days_past'])))
+                if 'days_future' in d:
+                    c['days_future'] = max(1, min(14, int(d['days_future'])))
+                if 'member_keywords' in d:
+                    kws = [str(k).strip() for k in d['member_keywords'] if str(k).strip()]
+                    c['member_keywords'] = kws
+                if 'shorts_keywords' in d:
+                    kws = [str(k).strip() for k in d['shorts_keywords'] if str(k).strip()]
+                    c['shorts_keywords'] = kws
+                if 'search_max_daily' in d:
+                    c['search_max_daily'] = max(1, min(90, int(d['search_max_daily'])))
+                if 'operating_hours' in d:
+                    oh = d['operating_hours']
+                    enabled = bool(oh.get('enabled', False))
+                    start = str(oh.get('start', '08:00'))
+                    end   = str(oh.get('end',   '23:00'))
+                    def _valid_time(t):
+                        try:
+                            h, m = map(int, t.split(':'))
+                            return 0 <= h <= 23 and 0 <= m <= 59
+                        except Exception:
+                            return False
+                    if _valid_time(start) and _valid_time(end):
+                        c['operating_hours'] = {'enabled': enabled, 'start': start, 'end': end}
+                save_json(F_CONFIG, c)
+            if reset_twitch:
                 with _twitch_lock:
                     _twitch_token['token'] = None
                     _twitch_token['expires_at'] = 0
-            if 'refresh_interval' in d:
-                c['refresh_interval'] = max(60, int(d['refresh_interval']))
-            if 'days_past' in d:
-                c['days_past']   = max(1, min(14, int(d['days_past'])))
-            if 'days_future' in d:
-                c['days_future'] = max(1, min(14, int(d['days_future'])))
-            if 'member_keywords' in d:
-                kws = [str(k).strip() for k in d['member_keywords'] if str(k).strip()]
-                c['member_keywords'] = kws
-            if 'shorts_keywords' in d:
-                kws = [str(k).strip() for k in d['shorts_keywords'] if str(k).strip()]
-                c['shorts_keywords'] = kws
-            if 'search_max_daily' in d:
-                c['search_max_daily'] = max(1, min(90, int(d['search_max_daily'])))
-            if 'operating_hours' in d:
-                oh = d['operating_hours']
-                enabled = bool(oh.get('enabled', False))
-                start = str(oh.get('start', '08:00'))
-                end   = str(oh.get('end',   '23:00'))
-                # validate HH:MM format
-                def _valid_time(t):
-                    try:
-                        h, m = map(int, t.split(':'))
-                        return 0 <= h <= 23 and 0 <= m <= 59
-                    except Exception:
-                        return False
-                if _valid_time(start) and _valid_time(end):
-                    c['operating_hours'] = {'enabled': enabled, 'start': start, 'end': end}
-            save_json(F_CONFIG, c)
-            if 'youtube_api_key' in d or 'twitch_client_secret' in d:
-                threading.Thread(target=refresh_all, daemon=True).start()
+            if trigger_refresh:
+                threading.Thread(target=_safe_refresh, daemon=True).start()
             self._json(200, {'ok': True})
 
         else:
@@ -1191,13 +1211,14 @@ class Handler(BaseHTTPRequestHandler):
             cid = p.rsplit('/', 1)[-1]
             d   = self._body()
             if d is None: return
-            chs = load_json(F_CHANNELS, [])
-            for i, c in enumerate(chs):
-                if c['id'] == cid:
-                    if 'name' in d: chs[i]['name'] = d['name']
-                    if 'tags' in d: chs[i]['tags'] = d['tags']
-                    save_json(F_CHANNELS, chs)
-                    self._json(200, chs[i]); return
+            with _channels_lock:
+                chs = load_json(F_CHANNELS, [])
+                for i, c in enumerate(chs):
+                    if c['id'] == cid:
+                        if 'name' in d: chs[i]['name'] = d['name']
+                        if 'tags' in d: chs[i]['tags'] = d['tags']
+                        save_json(F_CHANNELS, chs)
+                        self._json(200, chs[i]); return
             self._json(404, {'error': 'not found'})
         else:
             self.send_response(404); self.end_headers()
@@ -1206,21 +1227,24 @@ class Handler(BaseHTTPRequestHandler):
         p = self._path()
         if p.startswith('/api/tags/'):
             name = p.rsplit('/', 1)[-1]
-            tags = load_json(F_TAGS, [])
-            tags = [t for t in tags if t != name]
-            save_json(F_TAGS, tags)
-            chs = load_json(F_CHANNELS, [])
-            for c in chs:
-                if 'tags' in c:
-                    c['tags'] = [t for t in c['tags'] if t != name]
-            save_json(F_CHANNELS, chs)
+            with _tags_lock:
+                tags = load_json(F_TAGS, [])
+                tags = [t for t in tags if t != name]
+                save_json(F_TAGS, tags)
+            with _channels_lock:
+                chs = load_json(F_CHANNELS, [])
+                for c in chs:
+                    if 'tags' in c:
+                        c['tags'] = [t for t in c['tags'] if t != name]
+                save_json(F_CHANNELS, chs)
             self._json(200, tags)
 
         elif p.startswith('/api/channels/'):
             cid = p.rsplit('/', 1)[-1]
-            chs = load_json(F_CHANNELS, [])
-            new = [c for c in chs if c['id'] != cid]
-            save_json(F_CHANNELS, new)
+            with _channels_lock:
+                chs = load_json(F_CHANNELS, [])
+                new = [c for c in chs if c['id'] != cid]
+                save_json(F_CHANNELS, new)
             with _lock:
                 cache = load_json(F_CACHE, {'streams': []})
                 cache['streams'] = [s for s in cache['streams'] if s.get('channelId') != cid]
