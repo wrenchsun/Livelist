@@ -127,6 +127,23 @@ body{font-family:'Segoe UI','Yu Gothic UI',system-ui,sans-serif;
 .section-count{font-size:10px;color:var(--txt3);background:var(--surf2);border:1px solid var(--b2);padding:1px 7px;border-radius:10px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .cards.live-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+/* ── Display modes ── */
+.cards.mode-grid-m{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.cards.mode-grid-s{grid-template-columns:repeat(auto-fill,minmax(155px,1fr))}
+.cards.mode-grid-s .card-title{font-size:12px;-webkit-line-clamp:1}
+.cards.mode-grid-s .card-ch-name{font-size:10px}
+.cards.mode-list,.cards.mode-compact{display:flex;flex-direction:column;gap:4px}
+.cards.mode-list .card{flex-direction:row}
+.cards.mode-list .thumb-wrap{width:160px;min-width:160px;aspect-ratio:unset;height:90px}
+.cards.mode-list .card-body{padding:8px 12px;justify-content:center}
+.cards.mode-compact .card{flex-direction:row;align-items:center;border-radius:6px}
+.cards.mode-compact .thumb-wrap{display:none}
+.cards.mode-compact .card-body{flex-direction:row;align-items:center;padding:5px 10px;gap:8px;min-width:0}
+.cards.mode-compact .card-title{flex:1;-webkit-line-clamp:unset;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.cards.mode-compact .card-time{flex-shrink:0;white-space:nowrap;font-size:10px}
+.cards.mode-compact .card-ch{flex-shrink:0;max-width:130px}
+a.card-ch{text-decoration:none}
+a.card-ch:hover .card-ch-name{color:var(--txt);text-decoration:underline}
 
 /* ── Cards ── */
 .card{background:var(--surf);border:1px solid var(--b1);border-radius:10px;overflow:hidden;
@@ -571,6 +588,23 @@ let _channels = [], _streams = [], _tags = [], _memberKeywords = [], _shortsKeyw
 let _autoRefreshOnLoad = localStorage.getItem('haisin_auto_refresh_on_load') !== 'false';
 let _tagFilters = new Set(); // empty = all
 let _tagFilterMode = localStorage.getItem('haisin_tag_filter_mode') || 'OR'; // 'OR' | 'AND'
+const DISPLAY_MODES = [
+  { key: 'grid-l',  label: '⊞L' },
+  { key: 'grid-m',  label: '⊞M' },
+  { key: 'grid-s',  label: '⊞S' },
+  { key: 'list',    label: '⊟' },
+  { key: 'compact', label: '≡' },
+];
+let _displayMode = localStorage.getItem('haisin_display_mode') || 'grid-l';
+
+function cycleDisplayMode() {
+  const idx = DISPLAY_MODES.findIndex(m => m.key === _displayMode);
+  _displayMode = DISPLAY_MODES[(idx + 1) % DISPLAY_MODES.length].key;
+  localStorage.setItem('haisin_display_mode', _displayMode);
+  renderTagFilterBar();
+  renderStreams();
+}
+
 let _typeFilters     = new Set(TYPE_DEFS.map(d => d.key));
 let _platformFilters = new Set(PLATFORM_DEFS.map(d => d.key));
 let _editingChId = null;
@@ -684,7 +718,9 @@ function renderTagFilterBar() {
     ).join('')
     + `<span class="tf-sep"></span>`
     + `<button class="tag-chip${_tagFilterMode==='OR'?' active':''}" onclick="toggleTagFilterMode('OR')" style="flex-shrink:0">OR</button>`
-    + `<button class="tag-chip${_tagFilterMode==='AND'?' active':''}" onclick="toggleTagFilterMode('AND')" style="flex-shrink:0">AND</button>`;
+    + `<button class="tag-chip${_tagFilterMode==='AND'?' active':''}" onclick="toggleTagFilterMode('AND')" style="flex-shrink:0">AND</button>`
+    + `<span class="tf-sep"></span>`
+    + `<button class="tag-chip" onclick="cycleDisplayMode()" style="flex-shrink:0" title="表示モード切り替え">${DISPLAY_MODES[(DISPLAY_MODES.findIndex(m=>m.key===_displayMode)+1)%DISPLAY_MODES.length].label}</button>`;
 }
 
 function setTagFilter(tag) {
@@ -1171,7 +1207,7 @@ function renderStreams() {
         <span class="section-label${sec==='live'?' live':''}">${SEC_LABEL[sec]}</span>
         <span class="section-count">${items.length}</span>
       </div>
-      <div class="cards${sec==='live'?' live-grid':''}">${items.map(cardHTML).join('')}</div>
+      <div class="cards${sec==='live'&&_displayMode==='grid-l'?' live-grid':''} ${_displayMode!=='grid-l'?'mode-'+_displayMode:''}">${items.map(cardHTML).join('')}</div>
     </div>`;
   }
   if (!any) {
@@ -1223,7 +1259,7 @@ function cardHTML(s) {
       ${dur?`<span class="duration-badge">${esc(dur)}</span>`:''}
     </a>
     <div class="card-body">
-      <div class="card-ch">${chImg}<span class="card-ch-name">${esc(s.channelName||'')}</span></div>
+      ${(()=>{const _ch=_channels.find(c=>c.id===s.channelId);const _chUrl=_ch?.url;return _chUrl?`<a class="card-ch" href="${esc(_chUrl)}" target="_blank" rel="noopener">${chImg}<span class="card-ch-name">${esc(s.channelName||'')}</span></a>`:`<div class="card-ch">${chImg}<span class="card-ch-name">${esc(s.channelName||'')}</span></div>`})()}
       <div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div>
       <div class="card-time${s.type==='live'?' live-t':t.soon?' soon-t':''}">${esc(t.text)}</div>
     </div>
