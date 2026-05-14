@@ -1205,7 +1205,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         p = self._path()
         if p.startswith('/api/tags/'):
-            name = urllib.parse.unquote(p.rsplit('/', 1)[-1])
+            name = p.rsplit('/', 1)[-1]
             tags = load_json(F_TAGS, [])
             tags = [t for t in tags if t != name]
             save_json(F_TAGS, tags)
