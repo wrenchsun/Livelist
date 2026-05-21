@@ -593,6 +593,7 @@ def fetch_youtube_streams(channel: ChannelDict) -> list[StreamDict]:
     except Exception as e:
         record_api('rss', False)
         print(f'    RSS error ({cid}): {e}')
+        raise
 
     if api_key and videos:
         ids = list(videos.keys())
@@ -814,6 +815,7 @@ def refresh_all(single_channel: ChannelDict | None = None) -> None:
     print(f'[{_ts()}] 更新開始: {label}')
 
     all_streams = []
+    failed_cids = set()
     for ch in targets:
         try:
             streams = fetch_channel_streams(ch)
@@ -823,6 +825,7 @@ def refresh_all(single_channel: ChannelDict | None = None) -> None:
             all_streams.extend(streams)
             print(f'  {ch["name"]}: {len(streams)} 件')
         except Exception as e:
+            failed_cids.add(ch['id'])
             print(f'  {ch.get("name","?")} エラー: {e}')
 
     with _lock:
@@ -845,11 +848,16 @@ def refresh_all(single_channel: ChannelDict | None = None) -> None:
         if extra:
             print(f'  ピン止め補完: {len(extra)} 件')
 
+        # RSS失敗チャンネルの既存キャッシュを保持（archive/video 消失を防ぐ）
+        fallback = [s for s in cache.get('streams', []) if s.get('channelId') in failed_cids]
+        if fallback:
+            print(f'  フォールバック（RSS失敗）: {len(fallback)} 件保持')
+
         if single_channel:
             kept   = [s for s in cache.get('streams', []) if s.get('channelId') not in target_cids]
-            merged = kept + all_streams + extra
+            merged = kept + all_streams + extra + fallback
         else:
-            merged = all_streams + extra
+            merged = all_streams + extra + fallback
 
         seen, unique = set(), []
         for s in merged:
