@@ -1,3 +1,3 @@
-__version__ = '1.0.0'
-__branch__  = 'dev'
-__commit__  = 'local'
+__version__ = '1.1.0'
+__branch__  = 'fix/robustness'
+__commit__  = 'a82403a'
