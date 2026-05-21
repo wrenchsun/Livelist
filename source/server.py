@@ -849,7 +849,10 @@ def refresh_all(single_channel: ChannelDict | None = None) -> None:
             print(f'  ピン止め補完: {len(extra)} 件')
 
         # RSS失敗チャンネルの既存キャッシュを保持（archive/video 消失を防ぐ）
-        fallback = [s for s in cache.get('streams', []) if s.get('channelId') in failed_cids]
+        # upcoming/live は _recheck_pinned → extra で処理済みのため除外
+        fallback = [s for s in cache.get('streams', [])
+                    if s.get('channelId') in failed_cids
+                    and s.get('type') not in ('upcoming', 'live')]
         if fallback:
             print(f'  フォールバック（RSS失敗）: {len(fallback)} 件保持')
 
