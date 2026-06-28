@@ -423,6 +423,26 @@ def _enrich_from_rss(cid, url):
 
 # ── Stream fetching ───────────────────────────────────────────────────────────
 
+def _filter_display_range(streams: list[StreamDict], c: dict | None = None) -> list[StreamDict]:
+    """設定された表示範囲（過去・未来）外のストリームを除外する。
+    配信中（live）は予定時刻に関係なく常に表示する。
+    キャッシュには pinned 再確認・RSS失敗フォールバック等で範囲外の枠が
+    残ることがあるため、配信時に必ず範囲でフィルタする。"""
+    if c is None:
+        c = cfg()
+    cutoff_past   = now_utc() - timedelta(days=c.get('days_past',   2))
+    cutoff_future = now_utc() + timedelta(days=c.get('days_future', 2))
+    result = []
+    for s in streams:
+        if s.get('type') == 'live':
+            result.append(s)
+            continue
+        ref = parse_dt(s.get('scheduledAt') or s.get('publishedAt'))
+        if ref and (ref < cutoff_past or ref > cutoff_future):
+            continue
+        result.append(s)
+    return result
+
 def fetch_channel_streams(channel):
     if channel.get('platform') == 'twitch':
         return fetch_twitch_streams(channel)
@@ -550,8 +570,6 @@ def fetch_youtube_streams(channel: ChannelDict) -> list[StreamDict]:
     c = cfg()
     api_key  = c.get('youtube_api_key', '')
     cid      = channel['id']
-    cutoff_past   = now_utc() - timedelta(days=c.get('days_past',   2))
-    cutoff_future = now_utc() + timedelta(days=c.get('days_future', 2))
 
     videos = {}
     try:
@@ -654,16 +672,7 @@ def fetch_youtube_streams(channel: ChannelDict) -> list[StreamDict]:
                 except Exception:
                     pass
 
-    result = []
-    for s in videos.values():
-        if s.get('type') == 'live':
-            result.append(s)
-            continue
-        ref = parse_dt(s.get('scheduledAt') or s.get('publishedAt'))
-        if ref:
-            if ref < cutoff_past or ref > cutoff_future:
-                continue
-        result.append(s)
+    result = _filter_display_range(list(videos.values()), c)
 
     return result
 
@@ -993,7 +1002,7 @@ class Handler(BaseHTTPRequestHandler):
         elif p == '/api/streams':
             with _lock:
                 cache = load_json(F_CACHE, {})
-            self._json(200, cache.get('streams', []))
+            self._json(200, _filter_display_range(cache.get('streams', [])))
 
         elif p == '/api/config':
             c = cfg()
