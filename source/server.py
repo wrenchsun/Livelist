@@ -434,7 +434,14 @@ def _filter_display_range(streams: list[StreamDict], c: dict | None = None) -> l
     cutoff_future = now_utc() + timedelta(days=c.get('days_future', 2))
     result = []
     for s in streams:
+        # 配信中は予定時刻に関係なく常に表示。
+        # type=='live' のほか、開始済みで未終了のもの（member 判定で
+        # type が 'member' に上書きされた Twitch/YouTube の配信中枠など）も
+        # 「配信中」として扱い、範囲フィルタから除外する。
         if s.get('type') == 'live':
+            result.append(s)
+            continue
+        if s.get('actualStart') and not s.get('actualEnd'):
             result.append(s)
             continue
         ref = parse_dt(s.get('scheduledAt') or s.get('publishedAt'))
